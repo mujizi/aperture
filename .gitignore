@@ -1,0 +1,10 @@
+node_modules/
+.venv/
+dist/
+.build/
+.env
+.aperture-data/
+coverage/
+*.log
+.DS_Store
+plugins/aperture-attention/runtime/

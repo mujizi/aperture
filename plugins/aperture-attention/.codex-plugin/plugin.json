@@ -1,0 +1,24 @@
+{
+  "name": "aperture-attention",
+  "version": "0.1.0",
+  "description": "Route Codex events into evidence-backed human attention items.",
+  "author": {
+    "name": "Aperture"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Aperture Attention",
+    "shortDescription": "See only what deserves your attention.",
+    "longDescription": "A local-first Agent Attention Layer that observes Codex lifecycle events, identifies risk and decision points, verifies evidence, and renders a 30-second review.",
+    "developerName": "Aperture",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "Show my latest Aperture Attention Review.",
+      "What in this task still needs my decision?",
+      "Open the evidence behind the highest-risk item."
+    ],
+    "brandColor": "#E9B34C"
+  },
+  "mcpServers": "./.mcp.json"
+}

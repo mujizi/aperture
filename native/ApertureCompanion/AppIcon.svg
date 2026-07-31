@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="lens" cx="36%" cy="24%" r="84%">
+      <stop offset="0" stop-color="#20272b"/>
+      <stop offset=".62" stop-color="#0d1114"/>
+      <stop offset="1" stop-color="#050708"/>
+    </radialGradient>
+    <clipPath id="circle"><circle cx="512" cy="512" r="454"/></clipPath>
+  </defs>
+
+  <circle cx="512" cy="512" r="454" fill="url(#lens)"/>
+  <g clip-path="url(#circle)">
+    <path d="M512 512 L267 115 L543 58 L672 398 L585 540 Z" fill="#31383c"/>
+    <path d="M512 512 L543 58 L817 172 L664 463 L554 580 Z" fill="#3c4346"/>
+    <path d="M512 512 L817 172 L966 429 L659 592 L500 586 Z" fill="#2a3033"/>
+    <path d="M512 512 L966 429 L899 704 L566 673 L447 552 Z" fill="#373d40"/>
+    <path d="M512 512 L899 704 L677 920 L426 650 L431 500 Z" fill="#292f32"/>
+    <path d="M512 512 L677 920 L389 948 L338 582 L468 458 Z" fill="#343a3d"/>
+    <path d="M512 512 L389 948 L145 790 L354 495 L501 423 Z" fill="#242a2d"/>
+    <path d="M512 512 L145 790 L58 508 L394 350 L540 422 Z" fill="#303639"/>
+    <path d="M512 512 L58 508 L267 115 L590 351 L596 500 Z" fill="#252b2e"/>
+  </g>
+
+  <circle cx="512" cy="512" r="92" fill="#ffffff"/>
+</svg>
