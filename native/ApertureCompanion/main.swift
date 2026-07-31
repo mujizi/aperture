@@ -91,6 +91,15 @@ private final class FloatingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+private final class SelectableWebView: WKWebView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        super.mouseDown(with: event)
+    }
+}
+
 private final class DragHeaderView: NSView {
     private var mouseDownLocation: NSPoint?
     private var windowOriginAtMouseDown: NSPoint?
@@ -1849,14 +1858,14 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
         configuration.websiteDataStore = .default()
-        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView = SelectableWebView(frame: .zero, configuration: configuration)
         webView.allowsMagnification = false
         webView.setValue(false, forKey: "drawsBackground")
 
         bubbleView = BubbleView(frame: NSRect(x: 0, y: 0, width: 64, height: 64))
         panel = FloatingPanel(
             contentRect: NSRect(x: 0, y: 0, width: 430, height: 800),
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -2116,6 +2125,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         isExpanded = true
         let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
         let target = expandedFrame(anchoredAt: topLeft)
+        panel.styleMask.remove(.nonactivatingPanel)
         panel.styleMask.insert(.resizable)
         panel.minSize = NSSize(width: 320, height: 360)
         expandedView.alphaValue = 0
@@ -2139,6 +2149,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
         let target = bubbleFrame(anchoredAt: topLeft)
         panel.styleMask.remove(.resizable)
+        panel.styleMask.insert(.nonactivatingPanel)
         panel.minSize = NSSize(width: 64, height: 64)
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.22
@@ -2282,6 +2293,13 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         if type == "phase" {
             guard body["phase"] as? String == "processing" else { return }
             panel.orderFrontRegardless()
+            return
+        }
+        if type == "copy" {
+            guard let text = body["text"] as? String else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
             return
         }
         guard type == "review" else { return }
@@ -2459,10 +2477,27 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        configureMainMenu()
         let controller = AttentionPanelController()
         self.controller = controller
         configureStatusItem()
         controller.start()
+    }
+
+    private func configureMainMenu() {
+        let mainMenu = NSMenu()
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "编辑")
+        let copyItem = NSMenuItem(
+            title: "复制",
+            action: #selector(NSText.copy(_:)),
+            keyEquivalent: "c"
+        )
+        copyItem.keyEquivalentModifierMask = [.command]
+        editMenu.addItem(copyItem)
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        NSApp.mainMenu = mainMenu
     }
 
     private func configureStatusItem() {

@@ -240,7 +240,20 @@ a:focus-visible {
   width: 100%;
   min-height: 100%;
   margin: 0 auto;
-  padding: 30px 26px 44px;
+  padding: 30px 26px 82px;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.markdown-result * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.markdown-result ::selection {
+  background: color-mix(in srgb, var(--minimal-accent) 34%, transparent);
+  color: var(--minimal-text);
 }
 
 .simple-markdown {
@@ -436,11 +449,67 @@ a:focus-visible {
   font-size: inherit;
 }
 
+.minimal-copy-button {
+  position: fixed;
+  z-index: 60;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--minimal-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--minimal-surface) 91%, transparent);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+  color: var(--minimal-copy);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.minimal-shell:hover .minimal-copy-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.minimal-copy-button:hover {
+  border-color: color-mix(in srgb, var(--minimal-accent) 48%, var(--minimal-line));
+  color: var(--minimal-text);
+  transform: translateY(-1px);
+}
+
+.minimal-copy-button:active {
+  transform: translateY(0);
+}
+
+.minimal-copy-button--copied {
+  border-color: color-mix(in srgb, var(--minimal-accent) 55%, var(--minimal-line));
+  color: var(--minimal-accent);
+}
+
+.minimal-copy-button--failed {
+  border-color: color-mix(in srgb, var(--minimal-danger) 58%, var(--minimal-line));
+  color: var(--minimal-danger);
+}
+
 .minimal-error {
   position: fixed;
   z-index: 70;
   right: 14px;
-  bottom: 14px;
+  bottom: 62px;
   left: 14px;
   display: flex;
   align-items: flex-start;

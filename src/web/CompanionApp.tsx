@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -22,6 +22,51 @@ declare global {
 }
 
 type Phase = "waiting" | "processing" | "complete";
+type CopyState = "idle" | "copied" | "failed";
+
+async function copyReviewText(text: string) {
+  const nativeHandler = window.webkit?.messageHandlers?.aperture;
+  if (nativeHandler) {
+    nativeHandler.postMessage({ type: "copy", text });
+    return true;
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+export function selectedReviewText(root: HTMLElement | null) {
+  const selection = window.getSelection();
+  if (
+    !root ||
+    !selection ||
+    selection.isCollapsed ||
+    !selection.anchorNode ||
+    !selection.focusNode ||
+    !root.contains(selection.anchorNode) ||
+    !root.contains(selection.focusNode)
+  ) {
+    return null;
+  }
+  return selection.toString() || null;
+}
 
 function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
   if (!window.webkit?.messageHandlers?.aperture) return;
@@ -55,9 +100,13 @@ export function CompanionApp() {
   const [reviewHistory, setReviewHistory] = useState<ReviewSnapshot[]>([]);
   const [historyOffset, setHistoryOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
   const shellRef = useRef<HTMLElement | null>(null);
+  const reviewRef = useRef<HTMLElement | null>(null);
   const processingStartedAt = useRef(0);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectionAtCopyClick = useRef<string | null>(null);
   const review =
     reviewHistory[reviewHistory.length - 1 - historyOffset] ?? null;
 
@@ -89,6 +138,19 @@ export function CompanionApp() {
         phase: "complete"
       });
     }, delay);
+  };
+
+  const copyReview = async () => {
+    if (!review) return;
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    const copied = await copyReviewText(
+      selectionAtCopyClick.current ??
+        selectedReviewText(reviewRef.current) ??
+        review.resultMarkdown
+    );
+    selectionAtCopyClick.current = null;
+    setCopyState(copied ? "copied" : "failed");
+    copyTimer.current = setTimeout(() => setCopyState("idle"), 1800);
   };
 
   useEffect(() => {
@@ -139,9 +201,43 @@ export function CompanionApp() {
     return () => {
       stream.close();
       if (completionTimer.current) clearTimeout(completionTimer.current);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
     };
     // The EventSource owns subsequent state transitions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setCopyState("idle");
+    selectionAtCopyClick.current = null;
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, [review?.id]);
+
+  useEffect(() => {
+    const copySelection = (event: ClipboardEvent) => {
+      const text = selectedReviewText(reviewRef.current);
+      const nativeHandler = window.webkit?.messageHandlers?.aperture;
+      if (!text || !nativeHandler) return;
+      event.preventDefault();
+      nativeHandler.postMessage({ type: "copy", text });
+    };
+    const copySelectionShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "c") {
+        return;
+      }
+      const text = selectedReviewText(reviewRef.current);
+      const nativeHandler = window.webkit?.messageHandlers?.aperture;
+      if (!text || !nativeHandler) return;
+      event.preventDefault();
+      nativeHandler.postMessage({ type: "copy", text });
+    };
+
+    document.addEventListener("copy", copySelection);
+    window.addEventListener("keydown", copySelectionShortcut);
+    return () => {
+      document.removeEventListener("copy", copySelection);
+      window.removeEventListener("keydown", copySelectionShortcut);
+    };
   }, []);
 
   useEffect(() => {
@@ -207,11 +303,29 @@ export function CompanionApp() {
       )}
 
       {monitoring && phase === "complete" && review && (
-        <article className="markdown-result" aria-label="Aperture 处理结果">
-          <section className="markdown-section markdown-answer">
-            <AttentionMarkdown source={review.resultMarkdown} />
-          </section>
-        </article>
+        <>
+          <article
+            className="markdown-result"
+            aria-label="Aperture 处理结果"
+            ref={reviewRef}
+          >
+            <section className="markdown-section markdown-answer">
+              <AttentionMarkdown source={review.resultMarkdown} />
+            </section>
+          </article>
+          <button
+            aria-label={copyState === "copied" ? "已复制" : "复制选中内容或全部内容"}
+            className={`minimal-copy-button minimal-copy-button--${copyState}`}
+            onMouseDown={() => {
+              selectionAtCopyClick.current = selectedReviewText(reviewRef.current);
+            }}
+            onClick={() => void copyReview()}
+            title="复制选中内容或全部内容"
+            type="button"
+          >
+            {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </>
       )}
 
       {error && (
