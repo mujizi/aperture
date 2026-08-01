@@ -2,8 +2,8 @@
 
 ## 设计原则
 
-1. **适配人的信息带宽**：结果篇幅和筛选强度由聚焦度控制。
-2. **模型直接写最终结果**：不要求 JSON、固定字段或分类标签，不做二次拼装。
+1. **焦点与上下文共存**：所有入选语义保留在同一连续页面，聚焦度只改变视觉权重。
+2. **按关系选择视觉语法**：流程、对比、指标和独立陈述各自渲染，不把所有信息压成同一种列表。
 3. **保留事实边界**：提示词要求不复述问题、不编造事实，并优先保留会影响判断或下一步行动的信息。
 4. **失败必须可见**：模型失败直接成为错误结果，不以规则或原回答伪装成功。
 5. **历史与当前展示分离**：每轮结果持久化；默认显示最新一页，左右方向键浏览前后结果。
@@ -41,6 +41,23 @@ interface ReviewSnapshot {
   turnId: string | null;
   generatedAt: string;
   sourceCompletedAt?: string;
+  attentionScene?: {
+    version: 2;
+    spotlight: {
+      label: string;
+      text: string;
+      status: "none" | "done" | "partial" | "proposed" | "unverified";
+      highlights: Array<{ phrase: string; tone: "key" | "change" | "decision" | "risk" | "verified" }>;
+    };
+    gate: {
+      kind: "none" | "decision" | "blocker";
+      title: string;
+      detail: string;
+      options: string[];
+    };
+    views: Array<StatementView | FlowView | ComparisonView | MetricsView>;
+  };
+  attentionDocument?: AttentionDocumentV1; // 仅用于旧历史兼容
   resultMarkdown: string;
   analysis: {
     mode: "model" | "error";
@@ -51,38 +68,44 @@ interface ReviewSnapshot {
 }
 ```
 
-不存在 `summary`、`taskState`、`impact`、`certainty`、`items` 或规则结果。
+`resultMarkdown` 由场景派生，用于复制、旧历史和外部兼容。新界面直接消费 `attentionScene`，不再从 Markdown 粗体或关键词猜测注意力结构。
 
 ## 模型链路
 
 ```text
-清理后的本轮提问 + 完整最终回答 + 聚焦度
+清理后的本轮提问 + 完整最终回答
           │
           ▼
-默认提示词（注入聚焦度与目标字数）
+默认提示词（选择 spotlight、gate 与关系视图）
           │
           ▼
 OpenRouter chat completion
           │
-          ├─ 文本非空 ──→ 直接保存为 resultMarkdown
+          ├─ JSON Schema 校验通过 ──→ 保存 attentionScene，并派生 resultMarkdown
           └─ 调用异常 ──→ 保存明确错误，mode = error
 ```
 
-请求不携带 `response_format`、JSON Schema 或 `provider.require_parameters`。发送给模型的业务输入只有 `question`、`answer` 和 `focus`；不发送工具调用、工具输出、分析生命周期或事件列表。最终回答不再按固定字符数截断。响应无需解析业务字段，只读取消息文本并移除模型偶尔添加的外围 Markdown 代码围栏。
+请求使用 JSON Schema 约束最小场景协议。发送给模型的业务输入只有 `question`、`answer` 和当前 `focus`；不发送工具调用、工具输出、分析生命周期或事件列表。最终回答不按固定字符数截断。提示词只给跨任务目标与关系选择原则，不按任务类型规定固定输出章节。
 
 ## 聚焦度
 
-`focusLevel` 持久化在 `~/.aperture/settings.json`，范围为 `0...1`。越高越聚焦、结果越短：
+`focusLevel` 持久化在 `~/.aperture/settings.json`，范围为 `0...1`。它只改变连续页面内不同语义层的视觉反差，不重新调用模型：
 
-| 聚焦度 | 目标上限 |
-|---:|---:|
-| 0–20 | 500 字 |
-| 21–40 | 320 字 |
-| 41–60 | 220 字 |
-| 61–80 | 140 字 |
-| 81–100 | 90 字 |
+| 聚焦度 | 单页视觉权重 |
+|---:|---|
+| 0–45 | spotlight、supporting、context 权重较均衡 |
+| 46–78 | spotlight 和 gate 突出，context 降低对比度 |
+| 79–100 | spotlight 和 gate 最突出，supporting 与 context 变弱但仍完整显示 |
 
-这是软上限。重大阻塞、风险或必须由用户决定的事项优先保留。调整停止 600ms 后，会用新聚焦度重新生成当前一轮结果。
+decision 和 blocker 以独立 gate 呈现，无论聚焦度如何都不会隐藏。所有 flow、comparison、metrics 和 statement 按顺序直接渲染，不存在视图切换、折叠或展开操作。旧 `AttentionDocument v1` 与纯 Markdown 结果继续使用原渲染器。
+
+## 视觉编码
+
+- 空间与大小表达“焦点 / 上下文”，避免只依赖粗体。
+- spotlight 背后的轻量光晕保留 Aperture 的视觉语言，但不承担导航功能。
+- 语义颜色只标记变化、决定、风险和已验证事实；高亮短语必须原样存在于正文。
+- `flow` 使用带连接线的步骤轨迹，`comparison` 使用共享维度矩阵，`metrics` 使用数值卡片，`statement` 保留自然语言。
+- 路径、链接、命令和工具记录不单独形成视图，除非直接影响用户行动。
 
 ## HTTP API
 
@@ -93,7 +116,7 @@ OpenRouter chat completion
 | GET | `/api/health` | 健康检查 |
 | GET / POST | `/api/config` | 读取非敏感配置或保存模型配置 |
 | PATCH | `/api/monitoring` | 开启或暂停采集 |
-| PATCH | `/api/focus` | 保存聚焦度并重新生成当前结果 |
+| PATCH | `/api/focus` | 保存聚焦度并即时更新语义层显示 |
 | GET / PUT | `/api/prompt` | 读取或保存提示词 |
 | POST | `/api/events` | 追加事件 |
 | POST | `/api/analyze` | 为指定轮次生成结果 |

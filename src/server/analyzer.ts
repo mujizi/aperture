@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { AgentEvent, ReviewSnapshot } from "../core/types.js";
+import { attentionSceneToMarkdown } from "../core/attention-scene.js";
 import { cleanQuestion } from "./events.js";
 import { analyzeWithOpenRouter, type OpenRouterConfig } from "./openrouter.js";
 
@@ -56,7 +57,8 @@ function review(
   resultMarkdown: string,
   openRouter: OpenRouterConfig,
   started: number,
-  error: string | null
+  error: string | null,
+  attentionScene?: ReviewSnapshot["attentionScene"]
 ): ReviewSnapshot {
   return {
     id: randomUUID(),
@@ -66,6 +68,7 @@ function review(
     projectPath: context.projectPath,
     generatedAt: new Date().toISOString(),
     sourceCompletedAt: context.completedAt,
+    attentionScene,
     resultMarkdown,
     analysis: {
       mode: error ? "error" : "model",
@@ -83,11 +86,20 @@ export async function analyzeEvents(
   const started = Date.now();
   const context = turnContext(events);
   try {
-    const markdown = await analyzeWithOpenRouter(openRouter, {
+    const scene = await analyzeWithOpenRouter(openRouter, {
       question: context.question,
       answer: context.answer
     });
-    if (markdown) return review(context, markdown, openRouter, started, null);
+    if (scene) {
+      return review(
+        context,
+        attentionSceneToMarkdown(scene),
+        openRouter,
+        started,
+        null,
+        scene
+      );
+    }
     const reason = modelFailureReason(null, openRouter);
     return review(
       context,

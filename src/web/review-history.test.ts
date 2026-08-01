@@ -50,4 +50,22 @@ describe("review history", () => {
 
     expect(mergeReviewHistory([original], [reanalysis])).toEqual([reanalysis]);
   });
+
+  it("does not let a future-dated preview replace the latest real page", () => {
+    const preview = review(
+      "preview",
+      "preview-turn",
+      "2026-08-01T12:00:00.000Z",
+      "2026-08-01T06:00:00.000Z"
+    );
+    const real = review(
+      "real",
+      "real-turn",
+      "2026-08-01T07:00:00.000Z",
+      "2026-08-01T07:01:00.000Z"
+    );
+
+    expect(mergeReviewHistory([preview], [real]).map((item) => item.runId))
+      .toEqual(["preview", "real"]);
+  });
 });

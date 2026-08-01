@@ -1,10 +1,12 @@
-import { Check, Copy, FolderClosed, X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import {
   useEffect,
   useRef,
   useState
 } from "react";
 import type { ReviewSnapshot } from "../core/types";
+import { ApertureSceneView } from "./ApertureScene";
+import { AttentionDocumentView } from "./AttentionDocument";
 import { AttentionMarkdown } from "./AttentionMarkdown";
 import { getCurrentReview, getReviews } from "./api";
 import { mergeReviewHistory } from "./review-history";
@@ -79,7 +81,8 @@ function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
   window.webkit.messageHandlers.aperture.postMessage({
     type: "review",
     connected,
-    reviewId: review?.id ?? null
+    reviewId: review?.id ?? null,
+    projectName: review ? reviewProjectName(review) : null
   });
 }
 
@@ -103,6 +106,7 @@ function MinimalSignal({ processing }: { processing: boolean }) {
 export function CompanionApp() {
   const [phase, setPhase] = useState<Phase>("waiting");
   const [monitoring, setMonitoringState] = useState(true);
+  const [focusLevel, setFocusLevel] = useState(0.62);
   const [reviewHistory, setReviewHistory] = useState<ReviewSnapshot[]>([]);
   const [historyOffset, setHistoryOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -161,12 +165,13 @@ export function CompanionApp() {
 
   useEffect(() => {
     void Promise.all([getCurrentReview(), getReviews()])
-      .then(([{ review: current, monitoring: currentMonitoring }, history]) => {
+      .then(([{ review: current, monitoring: currentMonitoring, focus }, history]) => {
         const reviews = mergeReviewHistory(
           history.reviews,
           current ? [current] : []
         );
         setMonitoringState(currentMonitoring.enabled);
+        setFocusLevel(focus.level);
         setReviewHistory(reviews);
         setHistoryOffset(0);
         setPhase(
@@ -201,6 +206,12 @@ export function CompanionApp() {
       };
       setMonitoringState(payload.enabled);
       setPhase("waiting");
+    });
+    stream.addEventListener("focus", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        level: number;
+      };
+      setFocusLevel(payload.level);
     });
     stream.onerror = () => notifyNative(review, false);
 
@@ -315,15 +326,20 @@ export function CompanionApp() {
             aria-label="Aperture 处理结果"
             ref={reviewRef}
           >
-            <header
-              className="review-project"
-              title={review.projectPath ?? undefined}
-            >
-              <FolderClosed aria-hidden="true" size={12} />
-              <span>{reviewProjectName(review)}</span>
-            </header>
             <section className="markdown-section markdown-answer">
-              <AttentionMarkdown source={review.resultMarkdown} />
+              {review.attentionScene ? (
+                <ApertureSceneView
+                  scene={review.attentionScene}
+                  focusLevel={focusLevel}
+                />
+              ) : review.attentionDocument ? (
+                <AttentionDocumentView
+                  document={review.attentionDocument}
+                  focusLevel={focusLevel}
+                />
+              ) : (
+                <AttentionMarkdown source={review.resultMarkdown} />
+              )}
             </section>
           </article>
           <button

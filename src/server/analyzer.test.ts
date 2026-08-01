@@ -117,15 +117,51 @@ describe("attention focus", () => {
         parentEventId: null
       }
     ];
+    const scene = {
+      version: 2,
+      spotlight: {
+        label: "聚焦结果",
+        text: "聚焦结果",
+        status: "done",
+        highlights: []
+      },
+      gate: {
+        kind: "none",
+        title: "",
+        detail: "",
+        options: []
+      },
+      views: [
+        {
+          kind: "comparison",
+          label: "方案对比",
+          attention: "supporting",
+          status: "done",
+          tone: "change",
+          leftLabel: "上一版",
+          rightLabel: "当前版",
+          rows: [
+            {
+              aspect: "表达",
+              left: "普通列表",
+              right: "关系视图",
+              change: "better"
+            }
+          ]
+        }
+      ]
+    };
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ choices: [{ message: { content: "**聚焦结果**" } }] }),
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(scene) } }]
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await analyzeEvents(events, {
+    const result = await analyzeEvents(events, {
       apiKey: "test-key-value",
       model: "test/model",
       timeoutMs: 1000,
@@ -140,5 +176,8 @@ describe("attention focus", () => {
     expect(input.answer).toContain("结尾结论");
     expect(JSON.stringify(input)).not.toContain("大量工具噪声");
     expect(input.events).toBeUndefined();
+    expect(result.attentionScene).toEqual(scene);
+    expect(result.resultMarkdown).toContain("**聚焦结果**");
+    expect(result.resultMarkdown).toContain("| 对比项 | 上一版 | 当前版 |");
   });
 });

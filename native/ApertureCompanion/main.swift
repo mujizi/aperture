@@ -41,6 +41,7 @@ private struct InboxSummary: Decodable {
 
 private struct ReviewSummary: Decodable {
     let id: String
+    let projectName: String?
 }
 
 private struct ConfigEnvelope: Decodable {
@@ -1308,6 +1309,7 @@ private final class ResizeHandleView: NSView {
 
 private final class ExpandedContainerView: NSVisualEffectView {
     private let mark = ApertureMarkView(frame: .zero)
+    private let projectLabel = NSTextField(labelWithString: "")
     private let header = DragHeaderView(frame: .zero)
     private let separator = NSView(frame: .zero)
     private let monitoringSwitch = NSSwitch(frame: .zero)
@@ -1363,6 +1365,16 @@ private final class ExpandedContainerView: NSVisualEffectView {
         mark.setAccessibilityLabel("收起 Aperture")
         header.addSubview(mark)
 
+        projectLabel.translatesAutoresizingMaskIntoConstraints = false
+        projectLabel.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
+        projectLabel.lineBreakMode = .byTruncatingTail
+        projectLabel.maximumNumberOfLines = 1
+        projectLabel.isHidden = true
+        projectLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        projectLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        projectLabel.setAccessibilityLabel("当前工程")
+        header.addSubview(projectLabel)
+
         monitoringHandler = onToggleMonitoring
         monitoringSwitch.translatesAutoresizingMaskIntoConstraints = false
         monitoringSwitch.controlSize = .mini
@@ -1402,6 +1414,13 @@ private final class ExpandedContainerView: NSVisualEffectView {
             mark.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             mark.widthAnchor.constraint(equalToConstant: 29),
             mark.heightAnchor.constraint(equalToConstant: 29),
+
+            projectLabel.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 10),
+            projectLabel.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
+            projectLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: monitoringSwitch.leadingAnchor,
+                constant: -12
+            ),
 
             monitoringSwitch.trailingAnchor.constraint(
                 equalTo: settingsButton.leadingAnchor,
@@ -1627,6 +1646,13 @@ private final class ExpandedContainerView: NSVisualEffectView {
         currentPrompt = value
     }
 
+    func setProjectName(_ value: String?) {
+        let projectName = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        projectLabel.stringValue = projectName
+        projectLabel.toolTip = projectName.isEmpty ? nil : projectName
+        projectLabel.isHidden = projectName.isEmpty
+    }
+
     func setReaderSize(_ value: Int) {
         currentReaderSize = value
     }
@@ -1660,6 +1686,9 @@ private final class ExpandedContainerView: NSVisualEffectView {
         let tint = isDark
             ? NSColor(calibratedWhite: 0.58, alpha: 1)
             : NSColor(calibratedWhite: 0.36, alpha: 1)
+        projectLabel.textColor = isDark
+            ? NSColor(calibratedWhite: 0.72, alpha: 1)
+            : NSColor(calibratedWhite: 0.28, alpha: 1)
         settingsButton.contentTintColor = tint
     }
 }
@@ -2110,6 +2139,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     )
                     self.expandedView.setFocus(level: self.focusLevel)
                     self.expandedView.setPrompt(self.customPrompt)
+                    self.expandedView.setProjectName(
+                        envelope.review?.projectName
+                    )
                     self.settingsController?.setFocus(level: self.focusLevel)
                     self.settingsController?.setPrompt(self.customPrompt)
                     self.bubbleView.setFocus(level: self.focusLevel)
@@ -2429,6 +2461,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             return
         }
         guard type == "review" else { return }
+        expandedView.setProjectName(body["projectName"] as? String)
         let next = AttentionState(
             reviewID: body["reviewId"] as? String,
             unreadCount: state.unreadCount,

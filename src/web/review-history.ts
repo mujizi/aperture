@@ -1,5 +1,7 @@
 import type { ReviewSnapshot } from "../core/types";
 
+const MAX_COMPLETION_CLOCK_DRIFT_MS = 5 * 60 * 1000;
+
 function reviewKey(review: ReviewSnapshot) {
   return `${review.runId}:${review.turnId ?? "latest"}`;
 }
@@ -10,7 +12,11 @@ function timestamp(value: string | undefined) {
 }
 
 function completionTime(review: ReviewSnapshot) {
-  return timestamp(review.sourceCompletedAt ?? review.generatedAt);
+  const completed = timestamp(review.sourceCompletedAt ?? review.generatedAt);
+  const generated = timestamp(review.generatedAt);
+  return completed > generated + MAX_COMPLETION_CLOCK_DRIFT_MS
+    ? generated
+    : completed;
 }
 
 export function mergeReviewHistory(

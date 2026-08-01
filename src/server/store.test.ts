@@ -86,6 +86,40 @@ describe("event store projections", () => {
     expect(latest?.sourceCompletedAt).toBe("2026-07-31T06:20:00.000Z");
   });
 
+  it("does not let a future-dated source event pin the latest review", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
+    tempDirs.push(dir);
+    const store = new EventStore(dir);
+    const analysis = {
+      mode: "model" as const,
+      model: "test/model",
+      durationMs: 1,
+      error: null
+    };
+    await store.appendReview({
+      id: "future-preview",
+      runId: "preview",
+      turnId: "preview-turn",
+      generatedAt: "2026-08-01T06:00:00.000Z",
+      sourceCompletedAt: "2026-08-01T12:00:00.000Z",
+      resultMarkdown: "Preview",
+      analysis
+    });
+    await store.appendReview({
+      id: "real-latest",
+      runId: "real",
+      turnId: "real-turn",
+      generatedAt: "2026-08-01T07:01:00.000Z",
+      sourceCompletedAt: "2026-08-01T07:00:00.000Z",
+      resultMarkdown: "Real result",
+      analysis
+    });
+
+    const latest = await store.latestReview();
+    expect(latest?.id).toBe("real-latest");
+    expect(latest?.sourceCompletedAt).toBe("2026-08-01T07:00:00.000Z");
+  });
+
   it("backfills project metadata for legacy reviews from captured cwd", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
     tempDirs.push(dir);

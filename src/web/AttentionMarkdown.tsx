@@ -164,7 +164,7 @@ export function parseAttentionMarkdown(source: string): MarkdownBlock[] {
   return blocks;
 }
 
-function InlineMarkdown({ source }: { source: string }) {
+export function InlineMarkdown({ source }: { source: string }) {
   const tokens = source.split(
     /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<，。！？、；：）】》]+)/g
   );

@@ -13,6 +13,8 @@ import {
   redactSensitiveValue
 } from "./redaction.js";
 
+const MAX_COMPLETION_CLOCK_DRIFT_MS = 5 * 60 * 1000;
+
 async function readJsonLines<T>(filePath: string): Promise<T[]> {
   try {
     const content = await readFile(filePath, "utf8");
@@ -145,12 +147,22 @@ export class EventStore {
       if (event.type !== "assistant_stop" || !event.turnId) continue;
       completionTimes.set(`${event.runId}:${event.turnId}`, event.timestamp);
     }
-    const completedAt = (review: ReviewSnapshot) =>
-      review.sourceCompletedAt ??
+    const completedAt = (review: ReviewSnapshot) => {
+      const candidate = review.sourceCompletedAt ??
       (review.turnId
         ? completionTimes.get(`${review.runId}:${review.turnId}`)
         : undefined) ??
       review.generatedAt;
+      const candidateTime = Date.parse(candidate);
+      const generatedTime = Date.parse(review.generatedAt);
+      if (
+        !Number.isFinite(candidateTime) ||
+        candidateTime > generatedTime + MAX_COMPLETION_CLOCK_DRIFT_MS
+      ) {
+        return review.generatedAt;
+      }
+      return candidate;
+    };
     const latest = reviews.reduce<ReviewSnapshot | null>((current, candidate) => {
       if (!current) return candidate;
       return Date.parse(completedAt(candidate)) >= Date.parse(completedAt(current))
