@@ -1,12 +1,18 @@
-# Aperture
+<p align="center">
+  <img src="native/ApertureCompanion/AppIcon.svg" width="112" alt="Aperture app icon">
+</p>
 
-> Make model output fit human attention bandwidth.
+<h1 align="center">Aperture</h1>
 
-English · [简体中文](README.md)
+<p align="center">The attention layer between human input bandwidth and model output bandwidth.</p>
 
-Aperture is a macOS attention companion for Codex. After each completed turn, it reads the question and final answer, then uses OpenRouter to produce a glanceable attention brief: the most important result, genuine decisions, real blockers, and the most useful flow, comparison, or metrics.
+<p align="center"><strong>EN</strong> · <a href="README.cn.md">CN</a></p>
 
-It does not run tasks for you, and it is not a second chat window. It appears after Codex finishes so you can quickly answer: **What happened? Do I need to step in? What comes next?**
+Aperture is a macOS attention layer between human input bandwidth and model output bandwidth. After Codex completes a turn, it remaps the complete final answer into an `AttentionScene` that a person can absorb quickly: the primary outcome, genuine decisions, blockers, and the relationships and context that still matter.
+
+**It is not a summarizer.** Summarization tries to shorten source text; Aperture decides what should be seen first, what must remain visible, and what can recede into context at the person's current bandwidth.
+
+The attention pass is independent from the model used by Codex. Through OpenRouter, you can choose models from different upstream providers—including inexpensive, fast models—and turn monitoring on or off at any time.
 
 ## Quick start
 
@@ -53,7 +59,7 @@ This preview is not notarized with an Apple Developer ID, so macOS requires an e
    ```
 
 2. Open settings from the Aperture menu bar item.
-3. Choose an OpenRouter model and enter your API key.
+3. Through OpenRouter, choose a model from one of its upstream providers and enter your API key.
 4. Run the connection test, then enable monitoring.
 
 The key is used only for OpenRouter requests and stored in `~/.aperture/.env` with `0600` permissions. The local service listens only on `127.0.0.1:4317`.
@@ -62,19 +68,30 @@ The key is used only for OpenRouter requests and stored in `~/.aperture/.env` wi
 
 Continue working in Codex as usual. After each completed turn:
 
-- Aperture enters its processing state and presents the new brief;
+- Aperture enters its processing state and presents the new attention scene;
 - use the left and right arrow keys to move through older or newer results;
 - adjust focus to change the visual weight of the result, supporting details, and context;
 - collapse the panel into a draggable bubble and click it to expand again;
-- copy selected text or the full derived Markdown brief.
+- copy selected text or the full derived Markdown.
 
 To start Aperture automatically after a restart, add it in **System Settings → General → Login Items**.
 
+## Settings and controls
+
+| Setting | What it does |
+| --- | --- |
+| Monitoring | Turn capture of completed Codex turns on or off at any time. Turns completed while it is off are not backfilled. |
+| Focus | Move left for more detail or right to emphasize the core. It changes visual weight only; it does not call the model again or hide genuine decisions or blockers. |
+| Appearance | Switch between light and dark interfaces. |
+| Font size | Choose a reading size from Compact through Maximum for the floating window. |
+| Model configuration | Configure an OpenRouter API key and choose models from various upstream providers. You can favor inexpensive, fast models, refresh the catalog, test the connection, and save the configuration. |
+| Prompt | Customize how Aperture selects and organizes attention. The prompt is limited to 4,000 characters and affects future results only. |
+
 ## What Aperture helps you do
 
-### Turn long answers into glanceable outcomes
+### Remap model output to human bandwidth
 
-Aperture selects one primary result from the complete final answer, then retains only evidence, risks, and actions that affect judgment. It does not mechanically shorten and preserve every section of the original response.
+Aperture selects one primary result from the complete final answer, then retains the evidence, risks, and actions that affect judgment. It reconstructs the order of attention instead of mechanically shortening every section.
 
 ### Make decisions and blockers visible
 
@@ -91,7 +108,7 @@ Aperture chooses a representation that fits the content:
 
 ### Keep completion history across tasks
 
-Briefs are stored locally in actual completion order. Use the arrow keys to review sequential or concurrent tasks without reopening every original conversation.
+Attention scenes are stored locally in actual completion order. Use the arrow keys to review sequential or concurrent tasks without reopening every original conversation.
 
 ## How it works
 
@@ -192,7 +209,7 @@ Flows are used only for real flows, comparisons only for shared dimensions, and 
 
 ### 4. Failure must remain visible
 
-If the model is missing, times out, fails, or returns invalid content, Aperture shows an explicit error. It does not disguise failure with a rule-based summary or the untouched original answer.
+If the model is missing, times out, fails, or returns invalid content, Aperture shows an explicit error. It does not disguise failure with rule-based compression or the untouched original answer.
 
 ### 5. Focus does not delete facts
 
@@ -200,14 +217,14 @@ Focus changes visual weight without calling the model again or hiding genuine de
 
 ### 6. Local-first without pretending to be fully offline
 
-Capture, storage, history, and rendering are local. Semantic compression explicitly depends on OpenRouter today. The product should keep this boundary visible so users know which data leaves the machine.
+Capture, storage, history, and rendering are local. The attention pass explicitly depends on OpenRouter today. The product should keep this boundary visible so users know which data leaves the machine.
 
 ## Repository layout
 
 ```text
 src/core/                         Event and AttentionScene protocols
 src/server/                       Session watcher, storage, model, MCP, and HTTP API
-src/web/                          Continuous brief, relationship views, and history
+src/web/                          Continuous attention scenes, relationship views, and history
 native/ApertureCompanion/         macOS panel, bubble, and menu bar app
 plugins/aperture-attention/       Optional hooks, skill, MCP, and runtime
 scripts/                          Build, install, and release packaging

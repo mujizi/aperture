@@ -305,7 +305,7 @@ interface AttentionScene {
 
 - 当前 AttentionScene、连续页面、排序修复、输入清洗等改动仍处于未提交工作区。
 - CSS 中还保留更早 lens/AttentionDocument 等兼容样式，后续可以在稳定提交后单独清理，避免回退困难。
-- `README.md` 与 `docs/ARCHITECTURE.md` 已包含部分新架构说明，但本文件才是当前实验与回退状态的完整记录。
+- `README.md`、`README.en.md`、`README.cn.md` 与 `docs/ARCHITECTURE.md` 已包含面向使用者的架构说明，但本文件才是当前实验与回退状态的完整记录。
 
 ## 10. 下一轮设计约束
 
