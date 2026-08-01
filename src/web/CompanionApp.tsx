@@ -308,8 +308,7 @@ export function CompanionApp() {
       {monitoring && phase === "waiting" && (
         <section className="minimal-status">
           <MinimalSignal processing={false} />
-          <h1>等待</h1>
-          <p>目前没有新的结果。</p>
+          <h1>wait</h1>
         </section>
       )}
 

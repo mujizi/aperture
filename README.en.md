@@ -193,6 +193,19 @@ npm run package:mac
 
 Artifacts are written to `.build/release/`.
 
+## Future direction
+
+In the future, a person's AI conversation history may become one of their most valuable personal digital assets. It contains more than questions and answers: it records how the person thinks, chooses tools, completes work, and discovers methods that actually succeed.
+
+Aperture aims to make these AI usage records local, automatically organized, and able to evolve over time. They should not remain only a snapshot of one conversation or the trace of one task. They can gradually become durable assets:
+
+- reusable and continuously improved `skills`;
+- portable knowledge packs built around projects or domains;
+- the user's own preferences, judgment patterns, and ways of working;
+- proven, valuable model-use experience that can be invoked again.
+
+A future Aperture should not only explain what happened in the current turn. It should also help people own, organize, and reuse the experience they create with AI. This is a product direction, not a claim that every capability above is already available in the current `v0.2.0` preview.
+
 ## Design philosophy
 
 ### 1. Human attention is the final bandwidth
