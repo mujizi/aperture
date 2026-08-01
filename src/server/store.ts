@@ -99,8 +99,40 @@ export class EventStore {
   }
 
   async listReviews(runId?: string) {
-    const reviews = await readJsonLines<ReviewSnapshot>(this.reviewsPath);
-    return reviews.filter((review) => !runId || review.runId === runId);
+    const [reviews, events] = await Promise.all([
+      readJsonLines<ReviewSnapshot>(this.reviewsPath),
+      readJsonLines<AgentEvent>(this.eventsPath)
+    ]);
+    const projectByRun = new Map<string, { name: string; path: string }>();
+    const projectByTurn = new Map<string, { name: string; path: string }>();
+    for (const event of events) {
+      const projectPath = String(event.payload.cwd ?? "").trim();
+      if (!projectPath) continue;
+      const project = {
+        name: path.basename(path.resolve(projectPath)),
+        path: projectPath
+      };
+      projectByRun.set(event.runId, project);
+      if (event.turnId) {
+        projectByTurn.set(`${event.runId}:${event.turnId}`, project);
+      }
+    }
+    return reviews
+      .filter((review) => !runId || review.runId === runId)
+      .map((review) => {
+        if (review.projectName && review.projectPath) return review;
+        const project = review.turnId
+          ? projectByTurn.get(`${review.runId}:${review.turnId}`) ??
+            projectByRun.get(review.runId)
+          : projectByRun.get(review.runId);
+        return project
+          ? {
+              ...review,
+              projectName: review.projectName ?? project.name,
+              projectPath: review.projectPath ?? project.path
+            }
+          : review;
+      });
   }
 
   async latestReview(runId?: string) {

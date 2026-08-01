@@ -256,6 +256,27 @@ a:focus-visible {
   color: var(--minimal-text);
 }
 
+.review-project {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 20px;
+  color: var(--minimal-muted);
+  cursor: default;
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0.015em;
+  line-height: 1.35;
+}
+
+.review-project span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .simple-markdown {
   color: var(--minimal-copy);
 }

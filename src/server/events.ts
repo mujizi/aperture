@@ -1,18 +1,26 @@
 import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "../core/types.js";
 
-function stringValue(value: unknown) {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function excerpt(value: unknown, limit = 500) {
-  const text = stringValue(value).replace(/\s+/g, " ").trim();
-  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+export function cleanQuestion(value: string) {
+  return value
+    .replace(
+      /<in-app-browser-context\b[^>]*>[\s\S]*?<\/in-app-browser-context>/gi,
+      ""
+    )
+    .replace(
+      /<environment_context\b[^>]*>[\s\S]*?<\/environment_context>/gi,
+      ""
+    )
+    .replace(
+      /<recommended_plugins\b[^>]*>[\s\S]*?<\/recommended_plugins>/gi,
+      ""
+    )
+    .replace(
+      /^\s*#\s+Files mentioned by the user:\s*[\s\S]*?^\s*##\s+My request for Codex:\s*/im,
+      ""
+    )
+    .replace(/^\s*##\s+My request for Codex:\s*/im, "")
+    .trim();
 }
 
 export function eventFromHook(input: Record<string, unknown>): AgentEvent {
@@ -54,32 +62,4 @@ export function manualEvent(
     payload,
     parentEventId: null
   };
-}
-
-export function compactEvent(event: AgentEvent) {
-  const payload = event.payload;
-  if (event.type === "tool_result") {
-    return {
-      id: event.id,
-      type: event.type,
-      tool: payload.tool_name,
-      input: excerpt(payload.tool_input, 900),
-      response: excerpt(payload.tool_response, 1200)
-    };
-  }
-  if (event.type === "assistant_stop") {
-    return {
-      id: event.id,
-      type: event.type,
-      message: excerpt(payload.last_assistant_message, 2400)
-    };
-  }
-  if (event.type === "user_prompt") {
-    return {
-      id: event.id,
-      type: event.type,
-      prompt: excerpt(payload.prompt, 1800)
-    };
-  }
-  return { id: event.id, type: event.type, payload: excerpt(payload, 800) };
 }

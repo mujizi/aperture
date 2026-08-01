@@ -3,6 +3,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { AgentEvent } from "../core/types.js";
+import { cleanQuestion } from "./events.js";
 import {
   redactSensitiveText,
   redactSensitiveValue
@@ -34,16 +35,6 @@ interface SessionWatcherOptions {
 
 function stableId(...parts: string[]) {
   return createHash("sha256").update(parts.join("\u0000")).digest("hex").slice(0, 32);
-}
-
-function cleanPrompt(value: string) {
-  return value
-    .replace(
-      /<in-app-browser-context\b[^>]*>[\s\S]*?<\/in-app-browser-context>/gi,
-      ""
-    )
-    .replace(/^\s*##\s+My request for Codex:\s*/im, "")
-    .trim();
 }
 
 function isoTimestamp(value: unknown, fallback: string) {
@@ -187,27 +178,44 @@ export function parseCompletedTurns(
       .reverse()
       .find((row) => row.type === "turn_context")?.payload;
     const cwd = String(context?.cwd ?? defaultCwd);
-    const prompt = redactSensitiveText(
-      cleanPrompt(
-        String(
-          turnRows.find(
-            (row) =>
-              row.type === "event_msg" &&
-              row.payload?.type === "user_message"
-          )?.payload?.message ?? ""
-        )
-      )
-    );
-    const assistant = redactSensitiveText(
-      String(completion.payload.last_agent_message ?? "")
-    );
     const completedAt = isoTimestamp(
       completion.payload.completed_at ?? completion.timestamp,
       new Date().toISOString()
     );
+    const seenPrompts = new Set<string>();
+    const prompts = turnRows.flatMap((row) => {
+      if (
+        row.type !== "event_msg" ||
+        row.payload?.type !== "user_message"
+      ) {
+        return [];
+      }
+      const prompt = redactSensitiveText(
+        cleanQuestion(String(row.payload.message ?? ""))
+      );
+      if (!prompt || seenPrompts.has(prompt)) return [];
+      seenPrompts.add(prompt);
+      return [{ prompt, timestamp: row.timestamp ?? completedAt }];
+    });
+    const assistant = redactSensitiveText(
+      String(completion.payload.last_agent_message ?? "")
+    );
 
     const sessionId = stableId(runId, turnId, "session");
-    const promptId = stableId(runId, turnId, "prompt");
+    const promptEvents: AgentEvent[] = prompts.map((entry, index) => ({
+      id: stableId(runId, turnId, "prompt", String(index), entry.prompt),
+      source: "codex",
+      runId,
+      turnId,
+      timestamp: entry.timestamp,
+      type: "user_prompt",
+      payload: {
+        prompt: entry.prompt,
+        cwd,
+        capture_source: "codex_rollout"
+      },
+      parentEventId: sessionId
+    }));
     const stopId = stableId(runId, turnId, "stop");
     const events: AgentEvent[] = [
       {
@@ -227,20 +235,7 @@ export function parseCompletedTurns(
         },
         parentEventId: null
       },
-      {
-        id: promptId,
-        source: "codex",
-        runId,
-        turnId,
-        timestamp: turnRows[0]?.timestamp ?? completedAt,
-        type: "user_prompt",
-        payload: {
-          prompt: String(prompt),
-          cwd,
-          capture_source: "codex_rollout"
-        },
-        parentEventId: sessionId
-      },
+      ...promptEvents,
       ...toolEvents(turnRows, runId, turnId, cwd),
       {
         id: stopId,
@@ -255,7 +250,7 @@ export function parseCompletedTurns(
           transcript_path: transcriptPath,
           capture_source: "codex_rollout"
         },
-        parentEventId: promptId
+        parentEventId: promptEvents.at(-1)?.id ?? sessionId
       }
     ];
     turns.push({

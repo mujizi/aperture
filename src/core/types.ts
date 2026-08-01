@@ -20,6 +20,8 @@ export interface ReviewSnapshot {
   id: string;
   runId: string;
   turnId: string | null;
+  projectName?: string;
+  projectPath?: string;
   generatedAt: string;
   sourceCompletedAt?: string;
   resultMarkdown: string;

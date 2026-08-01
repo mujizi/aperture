@@ -56,7 +56,7 @@ interface ReviewSnapshot {
 ## 模型链路
 
 ```text
-本轮目标 + 压缩后的事件
+清理后的本轮提问 + 完整最终回答 + 聚焦度
           │
           ▼
 默认提示词（注入聚焦度与目标字数）
@@ -68,7 +68,7 @@ OpenRouter chat completion
           └─ 调用异常 ──→ 保存明确错误，mode = error
 ```
 
-请求不携带 `response_format`、JSON Schema 或 `provider.require_parameters`。响应无需解析业务字段，只读取消息文本并移除模型偶尔添加的外围 Markdown 代码围栏。
+请求不携带 `response_format`、JSON Schema 或 `provider.require_parameters`。发送给模型的业务输入只有 `question`、`answer` 和 `focus`；不发送工具调用、工具输出、分析生命周期或事件列表。最终回答不再按固定字符数截断。响应无需解析业务字段，只读取消息文本并移除模型偶尔添加的外围 Markdown 代码围栏。
 
 ## 聚焦度
 
@@ -76,11 +76,11 @@ OpenRouter chat completion
 
 | 聚焦度 | 目标上限 |
 |---:|---:|
-| 0–20 | 260 字 |
-| 21–40 | 180 字 |
-| 41–60 | 120 字 |
-| 61–80 | 80 字 |
-| 81–100 | 45 字 |
+| 0–20 | 500 字 |
+| 21–40 | 320 字 |
+| 41–60 | 220 字 |
+| 61–80 | 140 字 |
+| 81–100 | 90 字 |
 
 这是软上限。重大阻塞、风险或必须由用户决定的事项优先保留。调整停止 600ms 后，会用新聚焦度重新生成当前一轮结果。
 
@@ -114,6 +114,8 @@ OpenRouter chat completion
 ## 采集与故障策略
 
 - Session Watcher 监听本地 session 文件，以单轮结束为处理边界；Hooks 只作为可选低延迟通道。
+- Session Watcher 会移除已知的环境、浏览器和附件模板注入，保留并去重同一轮内真实的用户追加要求。
+- 工具事件仍可在本地事件存储中用于诊断，但不会进入注意力模型输入。
 - 监控关闭期间的轮次不会在重新打开后补处理。
 - 服务只监听 loopback；API Key 不会通过读取接口、结果或 MCP 返回。
 - Key 保存到 `~/.aperture/.env`，权限为 `0600`。

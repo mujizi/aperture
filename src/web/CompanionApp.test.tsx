@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { selectedReviewText } from "./CompanionApp";
+import type { ReviewSnapshot } from "../core/types";
+import { reviewProjectName, selectedReviewText } from "./CompanionApp";
 
 afterEach(() => {
   window.getSelection()?.removeAllRanges();
@@ -38,5 +39,28 @@ describe("selectedReviewText", () => {
     selection.addRange(range);
 
     expect(selectedReviewText(review)).toBeNull();
+  });
+});
+
+describe("reviewProjectName", () => {
+  const review = {
+    id: "review",
+    runId: "run",
+    turnId: "turn",
+    generatedAt: "2026-07-31T00:00:00.000Z",
+    resultMarkdown: "result",
+    analysis: { mode: "model", model: "test", durationMs: 1, error: null }
+  } satisfies ReviewSnapshot;
+
+  it("prefers the recorded project name", () => {
+    expect(reviewProjectName({ ...review, projectName: "Aperture" })).toBe(
+      "Aperture"
+    );
+  });
+
+  it("falls back to the final project path component", () => {
+    expect(
+      reviewProjectName({ ...review, projectPath: "/Users/example/OtherProject" })
+    ).toBe("OtherProject");
   });
 });

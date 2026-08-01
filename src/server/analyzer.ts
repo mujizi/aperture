@@ -1,19 +1,43 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { AgentEvent, ReviewSnapshot } from "../core/types.js";
+import { cleanQuestion } from "./events.js";
 import { analyzeWithOpenRouter, type OpenRouterConfig } from "./openrouter.js";
 
 function turnContext(events: AgentEvent[]) {
   const stopEvent = [...events]
     .reverse()
-    .find((event) => event.type === "assistant_stop");
-  const promptEvent = [...events]
+    .find(
+      (event) =>
+        event.type === "assistant_stop" &&
+        String(event.payload.last_assistant_message ?? "").trim()
+    );
+  const promptEvents = events.filter((event) => event.type === "user_prompt");
+  const promptEvent = promptEvents.at(-1);
+  const seenQuestions = new Set<string>();
+  const questions = promptEvents.flatMap((event) => {
+    const question = cleanQuestion(String(event.payload.prompt ?? ""));
+    if (!question || seenQuestions.has(question)) return [];
+    seenQuestions.add(question);
+    return [question];
+  });
+  const sessionEvent = [...events]
     .reverse()
-    .find((event) => event.type === "user_prompt");
+    .find((event) => event.type === "session_start");
+  const projectPath = String(
+    stopEvent?.payload.cwd ??
+      promptEvent?.payload.cwd ??
+      sessionEvent?.payload.cwd ??
+      ""
+  ).trim();
   return {
     runId: stopEvent?.runId ?? events[0]?.runId ?? "unknown-session",
     turnId: stopEvent?.turnId ?? events.at(-1)?.turnId ?? null,
-    goal: String(promptEvent?.payload.prompt ?? ""),
-    completedAt: stopEvent?.timestamp ?? new Date().toISOString()
+    question: questions.join("\n\n"),
+    answer: String(stopEvent?.payload.last_assistant_message ?? "").trim(),
+    completedAt: stopEvent?.timestamp ?? new Date().toISOString(),
+    projectName: projectPath ? path.basename(path.resolve(projectPath)) : undefined,
+    projectPath: projectPath || undefined
   };
 }
 
@@ -38,6 +62,8 @@ function review(
     id: randomUUID(),
     runId: context.runId,
     turnId: context.turnId,
+    projectName: context.projectName,
+    projectPath: context.projectPath,
     generatedAt: new Date().toISOString(),
     sourceCompletedAt: context.completedAt,
     resultMarkdown,
@@ -58,8 +84,8 @@ export async function analyzeEvents(
   const context = turnContext(events);
   try {
     const markdown = await analyzeWithOpenRouter(openRouter, {
-      goal: context.goal,
-      events
+      question: context.question,
+      answer: context.answer
     });
     if (markdown) return review(context, markdown, openRouter, started, null);
     const reason = modelFailureReason(null, openRouter);

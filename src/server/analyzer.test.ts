@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "../core/types";
 import { attentionCharacterBudget } from "./openrouter";
 import { analyzeEvents } from "./analyzer";
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("attention focus", () => {
   it("uses a smaller output budget at a higher focus level", () => {
-    expect(attentionCharacterBudget(0)).toBe(260);
-    expect(attentionCharacterBudget(0.5)).toBe(120);
-    expect(attentionCharacterBudget(1)).toBe(45);
+    expect(attentionCharacterBudget(0)).toBe(500);
+    expect(attentionCharacterBudget(0.5)).toBe(220);
+    expect(attentionCharacterBudget(1)).toBe(90);
   });
 
   it("surfaces a model error instead of falling back to the source answer", async () => {
@@ -24,7 +28,7 @@ describe("attention focus", () => {
         turnId: "turn-focus",
         timestamp: "2026-07-31T06:00:00.000Z",
         type: "user_prompt",
-        payload: { prompt: "给我详细步骤" },
+        payload: { prompt: "给我详细步骤", cwd: "/Users/example/Aperture" },
         parentEventId: null
       },
       {
@@ -34,7 +38,10 @@ describe("attention focus", () => {
         turnId: "turn-focus",
         timestamp: "2026-07-31T06:01:00.000Z",
         type: "assistant_stop",
-        payload: { last_assistant_message: answer },
+        payload: {
+          last_assistant_message: answer,
+          cwd: "/Users/example/Aperture"
+        },
         parentEventId: "prompt"
       }
     ];
@@ -48,5 +55,90 @@ describe("attention focus", () => {
     expect(result.resultMarkdown).toContain("模型调用失败");
     expect(result.resultMarkdown).toContain("API Key 尚未配置");
     expect(result.resultMarkdown).not.toContain("步骤 1");
+    expect(result.projectName).toBe("Aperture");
+    expect(result.projectPath).toBe("/Users/example/Aperture");
+  });
+
+  it("sends unique questions and the complete final answer without tool events", async () => {
+    const answer = `${"正文".repeat(1300)}结尾结论`;
+    const events: AgentEvent[] = [
+      {
+        id: "prompt-1",
+        source: "codex",
+        runId: "run-input",
+        turnId: "turn-input",
+        timestamp: "2026-08-01T01:00:00.000Z",
+        type: "user_prompt",
+        payload: { prompt: "先分析问题" },
+        parentEventId: null
+      },
+      {
+        id: "prompt-duplicate",
+        source: "codex",
+        runId: "run-input",
+        turnId: "turn-input",
+        timestamp: "2026-08-01T01:00:01.000Z",
+        type: "user_prompt",
+        payload: { prompt: "先分析问题" },
+        parentEventId: null
+      },
+      {
+        id: "prompt-2",
+        source: "codex",
+        runId: "run-input",
+        turnId: "turn-input",
+        timestamp: "2026-08-01T01:00:02.000Z",
+        type: "user_prompt",
+        payload: { prompt: "再给出可执行方案" },
+        parentEventId: null
+      },
+      {
+        id: "tool",
+        source: "codex",
+        runId: "run-input",
+        turnId: "turn-input",
+        timestamp: "2026-08-01T01:00:03.000Z",
+        type: "tool_result",
+        payload: {
+          tool_name: "exec_command",
+          tool_input: "不应进入模型",
+          tool_response: "大量工具噪声"
+        },
+        parentEventId: null
+      },
+      {
+        id: "stop",
+        source: "codex",
+        runId: "run-input",
+        turnId: "turn-input",
+        timestamp: "2026-08-01T01:01:00.000Z",
+        type: "assistant_stop",
+        payload: { last_assistant_message: answer },
+        parentEventId: null
+      }
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: "**聚焦结果**" } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeEvents(events, {
+      apiKey: "test-key-value",
+      model: "test/model",
+      timeoutMs: 1000,
+      focusLevel: 0.62,
+      customPrompt: "聚焦度：{{focus}}"
+    });
+
+    const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const input = JSON.parse(request.messages[1].content);
+    expect(input.question).toBe("先分析问题\n\n再给出可执行方案");
+    expect(input.answer).toBe(answer);
+    expect(input.answer).toContain("结尾结论");
+    expect(JSON.stringify(input)).not.toContain("大量工具噪声");
+    expect(input.events).toBeUndefined();
   });
 });

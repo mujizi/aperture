@@ -112,6 +112,68 @@ describe("Codex rollout watcher", () => {
     expect(serialized).toContain("[REDACTED_OPENROUTER_KEY]");
   });
 
+  it("keeps unique user additions and removes injected prompt context", () => {
+    const rows = [
+      {
+        timestamp: "2026-08-01T01:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          session_id: "run-context",
+          cwd: "/tmp/test",
+          thread_source: "user"
+        }
+      },
+      {
+        timestamp: "2026-08-01T01:00:01.000Z",
+        type: "event_msg",
+        payload: { type: "task_started", turn_id: "turn-context" }
+      },
+      {
+        timestamp: "2026-08-01T01:00:02.000Z",
+        type: "event_msg",
+        payload: {
+          type: "user_message",
+          message: `<environment_context>temporary machine details</environment_context>
+# Files mentioned by the user:
+## screenshot.png: /tmp/screenshot.png
+## My request for Codex:
+分析当前界面`
+        }
+      },
+      {
+        timestamp: "2026-08-01T01:00:03.000Z",
+        type: "event_msg",
+        payload: { type: "user_message", message: "分析当前界面" }
+      },
+      {
+        timestamp: "2026-08-01T01:00:04.000Z",
+        type: "event_msg",
+        payload: { type: "user_message", message: "再给出改进方案" }
+      },
+      {
+        timestamp: "2026-08-01T01:00:05.000Z",
+        type: "event_msg",
+        payload: {
+          type: "task_complete",
+          turn_id: "turn-context",
+          last_agent_message: "已经给出界面分析和改进方案。"
+        }
+      }
+    ];
+
+    const [turn] = parseCompletedTurns(
+      rows.map((row) => JSON.stringify(row)).join("\n"),
+      "/tmp/context.jsonl"
+    );
+    const prompts = turn.events
+      .filter((event) => event.type === "user_prompt")
+      .map((event) => event.payload.prompt);
+
+    expect(prompts).toEqual(["分析当前界面", "再给出改进方案"]);
+    expect(JSON.stringify(turn.events)).not.toContain("temporary machine details");
+    expect(JSON.stringify(turn.events)).not.toContain("/tmp/screenshot.png");
+  });
+
   it("does not read or process completed turns while monitoring is disabled", async () => {
     const sessionsDir = await mkdtemp(
       path.join(os.tmpdir(), "aperture-sessions-")

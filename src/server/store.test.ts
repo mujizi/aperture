@@ -86,6 +86,39 @@ describe("event store projections", () => {
     expect(latest?.sourceCompletedAt).toBe("2026-07-31T06:20:00.000Z");
   });
 
+  it("backfills project metadata for legacy reviews from captured cwd", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
+    tempDirs.push(dir);
+    const store = new EventStore(dir);
+    await store.appendEvent({
+      id: "project-event",
+      source: "codex",
+      runId: "run-project",
+      turnId: "turn-project",
+      timestamp: "2026-07-31T06:00:00.000Z",
+      type: "assistant_stop",
+      payload: { cwd: "/Users/example/Aperture" },
+      parentEventId: null
+    });
+    await store.appendReview({
+      id: "legacy-review",
+      runId: "run-project",
+      turnId: "turn-project",
+      generatedAt: "2026-07-31T06:01:00.000Z",
+      resultMarkdown: "Done",
+      analysis: {
+        mode: "model",
+        model: "test/model",
+        durationMs: 1,
+        error: null
+      }
+    });
+
+    const [review] = await store.listReviews("run-project");
+    expect(review.projectName).toBe("Aperture");
+    expect(review.projectPath).toBe("/Users/example/Aperture");
+  });
+
   it("never persists credentials embedded in captured events", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
     tempDirs.push(dir);

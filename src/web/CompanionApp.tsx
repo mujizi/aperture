@@ -1,4 +1,4 @@
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, FolderClosed, X } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -66,6 +66,12 @@ export function selectedReviewText(root: HTMLElement | null) {
     return null;
   }
   return selection.toString() || null;
+}
+
+export function reviewProjectName(review: ReviewSnapshot) {
+  if (review.projectName?.trim()) return review.projectName.trim();
+  const parts = review.projectPath?.split(/[\\/]/).filter(Boolean);
+  return parts?.at(-1) ?? "未知工程";
 }
 
 function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
@@ -309,6 +315,13 @@ export function CompanionApp() {
             aria-label="Aperture 处理结果"
             ref={reviewRef}
           >
+            <header
+              className="review-project"
+              title={review.projectPath ?? undefined}
+            >
+              <FolderClosed aria-hidden="true" size={12} />
+              <span>{reviewProjectName(review)}</span>
+            </header>
             <section className="markdown-section markdown-answer">
               <AttentionMarkdown source={review.resultMarkdown} />
             </section>

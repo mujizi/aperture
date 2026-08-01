@@ -173,8 +173,8 @@ private final class CompactActionButton: NSButton {
         imagePosition = .imageLeading
         isBordered = true
         bezelStyle = .rounded
-        controlSize = .small
-        font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        controlSize = .regular
+        font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
         focusRingType = .default
         target = self
         action = #selector(invoke)
@@ -384,6 +384,7 @@ private final class ApertureMarkView: NSView {
 }
 
 private final class SettingsViewController: NSViewController, NSTextViewDelegate {
+    private let titleLabel = NSTextField(labelWithString: "设置")
     private let focusLabel = NSTextField(labelWithString: "聚焦")
     private let focusSlider = NSSlider(
         value: 0.62,
@@ -495,11 +496,16 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 570))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 430, height: 800))
         root.wantsLayer = true
-        root.layer?.cornerRadius = 12
+        root.layer?.cornerRadius = 22
         root.layer?.cornerCurve = .continuous
+        root.layer?.masksToBounds = true
         view = root
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = NSFont.systemFont(ofSize: 18, weight: .semibold)
+        root.addSubview(titleLabel)
 
         let labels = [
             focusLabel,
@@ -512,12 +518,12 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         ]
         for label in labels {
             label.translatesAutoresizingMaskIntoConstraints = false
-            label.font = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
+            label.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
             root.addSubview(label)
         }
         promptStatus.translatesAutoresizingMaskIntoConstraints = false
         promptStatus.font = NSFont.monospacedDigitSystemFont(
-            ofSize: 10.5,
+            ofSize: 12,
             weight: .regular
         )
         promptStatus.lineBreakMode = .byTruncatingTail
@@ -528,7 +534,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(promptStatus)
 
         focusSlider.translatesAutoresizingMaskIntoConstraints = false
-        focusSlider.controlSize = .small
+        focusSlider.controlSize = .regular
         focusSlider.isContinuous = true
         focusSlider.toolTip = "向左保留更多细节，向右只看核心信息"
         focusSlider.setAccessibilityLabel("聚焦度")
@@ -537,7 +543,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(focusSlider)
 
         appearanceControl.translatesAutoresizingMaskIntoConstraints = false
-        appearanceControl.controlSize = .small
+        appearanceControl.controlSize = .regular
         appearanceControl.segmentStyle = .rounded
         appearanceControl.setImage(
             NSImage(systemSymbolName: "sun.max", accessibilityDescription: "亮色"),
@@ -554,7 +560,8 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(appearanceControl)
 
         sizePopup.translatesAutoresizingMaskIntoConstraints = false
-        sizePopup.controlSize = .small
+        sizePopup.controlSize = .regular
+        sizePopup.font = NSFont.systemFont(ofSize: 13)
         sizePopup.addItems(withTitles: sizeChoices.map { $0.1 })
         if let index = sizeChoices.firstIndex(where: { $0.0 == readerSize }) {
             sizePopup.selectItem(at: index)
@@ -564,13 +571,15 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(sizePopup)
 
         providerPopup.translatesAutoresizingMaskIntoConstraints = false
-        providerPopup.controlSize = .small
+        providerPopup.controlSize = .regular
+        providerPopup.font = NSFont.systemFont(ofSize: 13)
         providerPopup.addItem(withTitle: "OpenRouter")
         root.addSubview(providerPopup)
 
         for field in [secureKeyField, visibleKeyField] {
             field.translatesAutoresizingMaskIntoConstraints = false
-            field.controlSize = .small
+            field.controlSize = .regular
+            field.font = NSFont.systemFont(ofSize: 13)
             field.placeholderString = "填写 Key"
             root.addSubview(field)
         }
@@ -583,7 +592,8 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(keyVisibilityButton)
 
         modelCombo.translatesAutoresizingMaskIntoConstraints = false
-        modelCombo.controlSize = .small
+        modelCombo.controlSize = .regular
+        modelCombo.font = NSFont.systemFont(ofSize: 13)
         modelCombo.isEditable = true
         modelCombo.completes = true
         modelCombo.placeholderString = "选择或输入模型名称"
@@ -598,13 +608,17 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         saveModelButton.actionHandler = { [weak self] in self?.saveModelConfig() }
 
         modelStatus.translatesAutoresizingMaskIntoConstraints = false
-        modelStatus.font = NSFont.systemFont(ofSize: 10.5)
-        modelStatus.lineBreakMode = .byTruncatingTail
+        modelStatus.font = NSFont.systemFont(ofSize: 12)
+        modelStatus.lineBreakMode = .byWordWrapping
+        modelStatus.maximumNumberOfLines = 2
         root.addSubview(modelStatus)
 
         promptScroll.translatesAutoresizingMaskIntoConstraints = false
         promptScroll.hasVerticalScroller = true
+        promptScroll.hasHorizontalScroller = false
         promptScroll.autohidesScrollers = true
+        promptScroll.horizontalScrollElasticity = .none
+        promptScroll.verticalScrollElasticity = .automatic
         promptScroll.drawsBackground = false
         promptScroll.borderType = .noBorder
         promptScroll.wantsLayer = true
@@ -627,14 +641,17 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             width: CGFloat.greatestFiniteMagnitude,
             height: CGFloat.greatestFiniteMagnitude
         )
-        promptEditor.frame = NSRect(x: 0, y: 0, width: 368, height: 240)
+        promptEditor.frame = NSRect(x: 0, y: 0, width: 398, height: 420)
         promptEditor.textContainer?.containerSize = NSSize(
-            width: 368,
+            width: 398,
             height: CGFloat.greatestFiniteMagnitude
         )
         promptEditor.textContainer?.widthTracksTextView = true
-        promptEditor.font = NSFont.systemFont(ofSize: 12.5)
-        promptEditor.textContainerInset = NSSize(width: 10, height: 10)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byCharWrapping
+        promptEditor.defaultParagraphStyle = paragraphStyle
+        updatePromptFont()
+        promptEditor.textContainerInset = NSSize(width: 12, height: 12)
         promptEditor.delegate = self
         promptEditor.onSave = { [weak self] in self?.savePrompt() }
         promptEditor.onCancel = { [weak self] in self?.cancelPromptEditing() }
@@ -672,50 +689,54 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(promptActions)
 
         NSLayoutConstraint.activate([
-            focusLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
-            focusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            focusSlider.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 82),
-            focusSlider.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            titleLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            focusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 26),
+            focusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            focusSlider.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
+            focusSlider.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             focusSlider.centerYAnchor.constraint(equalTo: focusLabel.centerYAnchor),
 
-            appearanceLabel.topAnchor.constraint(equalTo: focusLabel.bottomAnchor, constant: 19),
+            appearanceLabel.topAnchor.constraint(equalTo: focusLabel.bottomAnchor, constant: 24),
             appearanceLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            appearanceControl.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            appearanceControl.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             appearanceControl.centerYAnchor.constraint(equalTo: appearanceLabel.centerYAnchor),
 
-            sizeLabel.topAnchor.constraint(equalTo: appearanceLabel.bottomAnchor, constant: 19),
+            sizeLabel.topAnchor.constraint(equalTo: appearanceLabel.bottomAnchor, constant: 24),
             sizeLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            sizePopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            sizePopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             sizePopup.centerYAnchor.constraint(equalTo: sizeLabel.centerYAnchor),
-            sizePopup.widthAnchor.constraint(equalToConstant: 150),
+            sizePopup.widthAnchor.constraint(equalToConstant: 166),
 
-            providerLabel.topAnchor.constraint(equalTo: sizeLabel.bottomAnchor, constant: 27),
+            providerLabel.topAnchor.constraint(equalTo: sizeLabel.bottomAnchor, constant: 32),
             providerLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            providerPopup.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 82),
-            providerPopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            providerPopup.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
+            providerPopup.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             providerPopup.centerYAnchor.constraint(equalTo: providerLabel.centerYAnchor),
 
-            keyLabel.topAnchor.constraint(equalTo: providerLabel.bottomAnchor, constant: 20),
+            keyLabel.topAnchor.constraint(equalTo: providerLabel.bottomAnchor, constant: 26),
             keyLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            secureKeyField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 82),
-            secureKeyField.trailingAnchor.constraint(equalTo: keyVisibilityButton.leadingAnchor, constant: -5),
+            secureKeyField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
+            secureKeyField.trailingAnchor.constraint(equalTo: keyVisibilityButton.leadingAnchor, constant: -7),
             secureKeyField.centerYAnchor.constraint(equalTo: keyLabel.centerYAnchor),
             visibleKeyField.leadingAnchor.constraint(equalTo: secureKeyField.leadingAnchor),
             visibleKeyField.trailingAnchor.constraint(equalTo: secureKeyField.trailingAnchor),
             visibleKeyField.centerYAnchor.constraint(equalTo: secureKeyField.centerYAnchor),
-            keyVisibilityButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            keyVisibilityButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
             keyVisibilityButton.centerYAnchor.constraint(equalTo: keyLabel.centerYAnchor),
             keyVisibilityButton.widthAnchor.constraint(equalToConstant: 28),
             keyVisibilityButton.heightAnchor.constraint(equalToConstant: 28),
 
-            modelLabel.topAnchor.constraint(equalTo: keyLabel.bottomAnchor, constant: 20),
+            modelLabel.topAnchor.constraint(equalTo: keyLabel.bottomAnchor, constant: 26),
             modelLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            modelCombo.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 82),
-            modelCombo.trailingAnchor.constraint(equalTo: refreshModelsButton.leadingAnchor, constant: -5),
+            modelCombo.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
+            modelCombo.trailingAnchor.constraint(equalTo: refreshModelsButton.leadingAnchor, constant: -7),
             modelCombo.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             refreshModelsButton.trailingAnchor.constraint(equalTo: testModelButton.leadingAnchor, constant: -2),
             testModelButton.trailingAnchor.constraint(equalTo: saveModelButton.leadingAnchor, constant: -2),
-            saveModelButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
+            saveModelButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
             refreshModelsButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             testModelButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             saveModelButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
@@ -726,33 +747,50 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             testModelButton.heightAnchor.constraint(equalToConstant: 28),
             saveModelButton.heightAnchor.constraint(equalToConstant: 28),
 
-            modelStatus.topAnchor.constraint(equalTo: modelCombo.bottomAnchor, constant: 7),
+            modelStatus.topAnchor.constraint(equalTo: modelCombo.bottomAnchor, constant: 9),
             modelStatus.leadingAnchor.constraint(equalTo: modelCombo.leadingAnchor),
-            modelStatus.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            modelStatus.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            promptLabel.topAnchor.constraint(equalTo: modelStatus.bottomAnchor, constant: 18),
+            promptLabel.topAnchor.constraint(equalTo: modelStatus.bottomAnchor, constant: 22),
             promptLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
             promptStatus.leadingAnchor.constraint(equalTo: promptLabel.trailingAnchor, constant: 8),
-            promptStatus.trailingAnchor.constraint(
-                lessThanOrEqualTo: promptActions.leadingAnchor,
-                constant: -8
-            ),
+            promptStatus.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
             promptStatus.centerYAnchor.constraint(equalTo: promptLabel.centerYAnchor),
-            promptActions.trailingAnchor.constraint(
-                equalTo: root.trailingAnchor,
-                constant: -16
-            ),
-            promptActions.centerYAnchor.constraint(equalTo: promptLabel.centerYAnchor),
 
-            promptScroll.topAnchor.constraint(equalTo: promptLabel.bottomAnchor, constant: 8),
-            promptScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            promptScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-            promptScroll.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16)
+            promptActions.topAnchor.constraint(equalTo: promptLabel.bottomAnchor, constant: 10),
+            promptActions.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            promptActions.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+
+            promptScroll.topAnchor.constraint(equalTo: promptActions.bottomAnchor, constant: 12),
+            promptScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            promptScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            promptScroll.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20)
         ])
 
         applyTheme()
         setPromptEditing(false)
         loadModelConfig()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        let availableWidth = promptScroll.contentSize.width
+        guard availableWidth > 0 else { return }
+        promptEditor.minSize.width = availableWidth
+        promptEditor.maxSize.width = availableWidth
+        var editorFrame = promptEditor.frame
+        editorFrame.size.width = availableWidth
+        promptEditor.frame = editorFrame
+        promptEditor.textContainer?.containerSize = NSSize(
+            width: availableWidth,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        if promptScroll.contentView.bounds.origin.x != 0 {
+            promptScroll.contentView.scroll(
+                to: NSPoint(x: 0, y: promptScroll.contentView.bounds.origin.y)
+            )
+            promptScroll.reflectScrolledClipView(promptScroll.contentView)
+        }
     }
 
     func setFocus(level: Double) {
@@ -766,17 +804,23 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
 
     func setReaderSize(_ value: Int) {
         readerSize = value
+        updatePromptFont()
         if let index = sizeChoices.firstIndex(where: { $0.0 == value }) {
             sizePopup.selectItem(at: index)
         }
     }
 
+    private func updatePromptFont() {
+        promptEditor.font = NSFont.systemFont(
+            ofSize: max(15, CGFloat(readerSize - 2)),
+            weight: .regular
+        )
+    }
+
     func setPrompt(_ value: String) {
-        if !isEditingPrompt {
-            promptEditor.string = value
-            promptEditor.scrollToBeginningOfDocument(nil)
-            updatePromptStatus()
-        }
+        guard !isEditingPrompt, promptEditor.string != value else { return }
+        promptEditor.string = value
+        updatePromptStatus()
     }
 
     func textDidChange(_ notification: Notification) {
@@ -993,11 +1037,14 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     private func beginPromptEditing() {
         guard !isEditingPrompt else { return }
         promptBeforeEditing = promptEditor.string
+        let visibleOrigin = promptScroll.contentView.bounds.origin
         setPromptEditing(true)
         view.window?.makeFirstResponder(promptEditor)
-        let end = (promptEditor.string as NSString).length
-        promptEditor.setSelectedRange(NSRange(location: end, length: 0))
-        promptEditor.scrollRangeToVisible(NSRange(location: end, length: 0))
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.promptScroll.contentView.scroll(to: visibleOrigin)
+            self.promptScroll.reflectScrolledClipView(self.promptScroll.contentView)
+        }
     }
 
     private func savePrompt() {
@@ -1095,6 +1142,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
                 : NSColor(calibratedWhite: 0.985, alpha: 0.98)
         ).cgColor
         for label in [
+            titleLabel,
             focusLabel,
             appearanceLabel,
             sizeLabel,
@@ -1275,12 +1323,11 @@ private final class ExpandedContainerView: NSVisualEffectView {
     private var themeHandler: ((Bool) -> Void)?
     private var sizeHandler: ((Int) -> Void)?
     private var promptHandler: ((String) -> Void)?
+    private var settingsToggleHandler: (() -> Void)?
     private var currentFocus = 0.62
     private var currentIsDark: Bool
     private var currentReaderSize: Int
     private var currentPrompt = ""
-    private var settingsPopover: NSPopover?
-    private weak var settingsController: SettingsViewController?
 
     init(
         webView: WKWebView,
@@ -1291,6 +1338,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
         onThemeChanged: @escaping (Bool) -> Void,
         onSizeChanged: @escaping (Int) -> Void,
         onPromptChanged: @escaping (String) -> Void,
+        onToggleSettings: @escaping () -> Void,
         onCollapse: @escaping () -> Void
     ) {
         currentIsDark = isDark
@@ -1329,9 +1377,10 @@ private final class ExpandedContainerView: NSVisualEffectView {
         themeHandler = onThemeChanged
         sizeHandler = onSizeChanged
         promptHandler = onPromptChanged
+        settingsToggleHandler = onToggleSettings
         settingsButton.translatesAutoresizingMaskIntoConstraints = false
         settingsButton.actionHandler = { [weak self] in
-            self?.toggleSettings()
+            self?.settingsToggleHandler?()
         }
         header.addSubview(settingsButton)
 
@@ -1572,67 +1621,23 @@ private final class ExpandedContainerView: NSVisualEffectView {
     func setFocus(level: Double) {
         currentFocus = min(1, max(0, level))
         mark.focusLevel = CGFloat(currentFocus)
-        settingsController?.setFocus(level: currentFocus)
     }
 
     func setPrompt(_ value: String) {
         currentPrompt = value
-        settingsController?.setPrompt(value)
     }
 
     func setReaderSize(_ value: Int) {
         currentReaderSize = value
-        settingsController?.setReaderSize(value)
     }
 
     @objc private func toggleMonitoring() {
         monitoringHandler?(monitoringSwitch.state == .on)
     }
 
-    private func toggleSettings() {
-        if settingsPopover?.isShown == true {
-            settingsPopover?.close()
-            return
-        }
-        let controller = SettingsViewController(
-            focusLevel: currentFocus,
-            isDark: currentIsDark,
-            readerSize: currentReaderSize,
-            prompt: currentPrompt,
-            onFocusChanged: { [weak self] level in
-                self?.setFocus(level: level)
-                self?.focusHandler?(level)
-            },
-            onThemeChanged: { [weak self] isDark in
-                self?.themeHandler?(isDark)
-            },
-            onSizeChanged: { [weak self] value in
-                self?.setReaderSize(value)
-                self?.sizeHandler?(value)
-            },
-            onPromptChanged: { [weak self] value in
-                self?.setPrompt(value)
-                self?.promptHandler?(value)
-            }
-        )
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.animates = true
-        popover.contentSize = NSSize(width: 400, height: 570)
-        popover.contentViewController = controller
-        settingsController = controller
-        settingsPopover = popover
-        popover.show(
-            relativeTo: settingsButton.bounds,
-            of: settingsButton,
-            preferredEdge: .minY
-        )
-    }
-
     func setTheme(isDark: Bool) {
         currentIsDark = isDark
         mark.isDark = isDark
-        settingsController?.setTheme(isDark: isDark)
         appearance = NSAppearance(
             named: isDark ? .darkAqua : .aqua
         )
@@ -1818,6 +1823,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     )
     private var lastWebLoad = Date.distantPast
     private var expandedSize = NSSize(width: 430, height: 800)
+    private var settingsPanel: FloatingPanel?
+    private var settingsController: SettingsViewController?
+    private var isPositioningSettings = false
 
     override init() {
         let storedTheme = UserDefaults.standard.object(
@@ -1876,6 +1884,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         var monitoringHandler: ((Bool) -> Void)?
         var focusHandler: ((Double) -> Void)?
         var promptHandler: ((String) -> Void)?
+        var settingsHandler: (() -> Void)?
         expandedView = ExpandedContainerView(
             webView: webView,
             isDark: initialIsDark,
@@ -1885,6 +1894,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             onThemeChanged: { isDark in themeHandler?(isDark) },
             onSizeChanged: { value in sizeHandler?(value) },
             onPromptChanged: { value in promptHandler?(value) },
+            onToggleSettings: { settingsHandler?() },
             onCollapse: { collapseHandler?() }
         )
         super.init()
@@ -1901,6 +1911,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         promptHandler = { [weak self] value in
             self?.updatePrompt(value)
         }
+        settingsHandler = { [weak self] in self?.toggleSettings() }
         contentController.add(self, name: "aperture")
         webView.navigationDelegate = self
         bubbleView.onOpen = { [weak self] in self?.expand() }
@@ -1927,6 +1938,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     }
 
     deinit {
+        closeSettings()
         monitorTimer?.invalidate()
         focusWorkItem?.cancel()
         resizeSaveWorkItem?.cancel()
@@ -1963,6 +1975,106 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
     func show() {
         panel.orderFrontRegardless()
+        settingsPanel?.orderFrontRegardless()
+    }
+
+    private func toggleSettings() {
+        if settingsPanel != nil {
+            closeSettings()
+            return
+        }
+
+        let controller = SettingsViewController(
+            focusLevel: focusLevel,
+            isDark: isDark,
+            readerSize: readerSize,
+            prompt: customPrompt,
+            onFocusChanged: { [weak self] level in
+                self?.updateFocus(level: level)
+            },
+            onThemeChanged: { [weak self] isDark in
+                self?.setTheme(isDark: isDark)
+            },
+            onSizeChanged: { [weak self] value in
+                self?.setReaderSize(value)
+            },
+            onPromptChanged: { [weak self] value in
+                self?.updatePrompt(value)
+            }
+        )
+        let settings = FloatingPanel(
+            contentRect: settingsFrame(),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        settings.level = .floating
+        settings.isOpaque = false
+        settings.backgroundColor = .clear
+        settings.hasShadow = true
+        settings.hidesOnDeactivate = false
+        settings.isReleasedWhenClosed = false
+        settings.collectionBehavior = panel.collectionBehavior
+        settings.animationBehavior = .utilityWindow
+        settings.contentViewController = controller
+        settings.alphaValue = 0
+        settingsPanel = settings
+        settingsController = controller
+        panel.addChildWindow(settings, ordered: .above)
+        positionSettingsPanel()
+        settings.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            settings.animator().alphaValue = 1
+        }
+    }
+
+    private func closeSettings() {
+        guard let settings = settingsPanel else { return }
+        panel.removeChildWindow(settings)
+        settings.orderOut(nil)
+        settings.contentViewController = nil
+        settingsPanel = nil
+        settingsController = nil
+    }
+
+    private func settingsFrame() -> NSRect {
+        let visible = currentScreen().visibleFrame
+        let gap: CGFloat = 10
+        let available = visible.width - panel.frame.width - gap - 48
+        let preferredWidth = max(430, panel.frame.width)
+        let width = min(preferredWidth, max(360, available))
+        return NSRect(
+            x: panel.frame.maxX + gap,
+            y: panel.frame.minY,
+            width: width,
+            height: panel.frame.height
+        )
+    }
+
+    private func positionSettingsPanel() {
+        guard let settings = settingsPanel, !isPositioningSettings else { return }
+        isPositioningSettings = true
+        defer { isPositioningSettings = false }
+
+        let visible = currentScreen().visibleFrame
+        let gap: CGFloat = 10
+        let targetSize = settingsFrame().size
+        let requiredWidth = panel.frame.width + gap + targetSize.width
+        let maximumX = visible.maxX - 16
+        if panel.frame.maxX + gap + targetSize.width > maximumX {
+            let originX = max(visible.minX + 16, maximumX - requiredWidth)
+            panel.setFrameOrigin(NSPoint(x: originX, y: panel.frame.minY))
+        }
+        settings.setFrame(
+            NSRect(
+                x: panel.frame.maxX + gap,
+                y: panel.frame.minY,
+                width: targetSize.width,
+                height: panel.frame.height
+            ),
+            display: true
+        )
     }
 
     func reload() {
@@ -1998,6 +2110,8 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     )
                     self.expandedView.setFocus(level: self.focusLevel)
                     self.expandedView.setPrompt(self.customPrompt)
+                    self.settingsController?.setFocus(level: self.focusLevel)
+                    self.settingsController?.setPrompt(self.customPrompt)
                     self.bubbleView.setFocus(level: self.focusLevel)
                     self.apply(next)
                     if recovered {
@@ -2049,18 +2163,25 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     func windowDidEndLiveResize(_ notification: Notification) {
         guard isExpanded else { return }
         expandedSize = panel.frame.size
+        positionSettingsPanel()
         persistExpandedSize()
     }
 
     func windowDidResize(_ notification: Notification) {
         guard isExpanded else { return }
         expandedSize = panel.frame.size
+        positionSettingsPanel()
         resizeSaveWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.persistExpandedSize()
         }
         resizeSaveWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard isExpanded else { return }
+        positionSettingsPanel()
     }
 
     private func persistExpandedSize() {
@@ -2143,6 +2264,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
     private func collapse() {
         guard isExpanded else { return }
+        closeSettings()
         expandedSize = panel.frame.size
         persistExpandedSize()
         isExpanded = false
@@ -2181,6 +2303,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         self.isDark = isDark
         UserDefaults.standard.set(isDark, forKey: "apertureThemeDark")
         expandedView.setTheme(isDark: isDark)
+        settingsController?.setTheme(isDark: isDark)
         bubbleView.setTheme(isDark: isDark)
         webView.evaluateJavaScript(
             "document.documentElement.dataset.theme = '\(isDark ? "dark" : "light")';"
@@ -2192,6 +2315,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         readerSize = value
         UserDefaults.standard.set(value, forKey: "apertureReaderSize")
         expandedView.setReaderSize(value)
+        settingsController?.setReaderSize(value)
         webView.evaluateJavaScript(
             "document.documentElement.style.setProperty('--reader-size', '\(value)px');"
         )
@@ -2238,6 +2362,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private func updatePrompt(_ value: String) {
         customPrompt = String(value.prefix(4000))
         expandedView.setPrompt(customPrompt)
+        settingsController?.setPrompt(customPrompt)
         var request = URLRequest(url: promptURL)
         request.httpMethod = "PATCH"
         request.timeoutInterval = 3
@@ -2256,6 +2381,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private func updateFocus(level: Double) {
         focusLevel = min(1, max(0, level))
         expandedView.setFocus(level: focusLevel)
+        settingsController?.setFocus(level: focusLevel)
         bubbleView.setFocus(level: focusLevel)
         focusWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in

@@ -145,11 +145,26 @@ const LAYERED_DEFAULT_ATTENTION_PROMPT_V2 = LAYERED_DEFAULT_ATTENTION_PROMPT_V1.
 - “阻塞”只用于目标当前无法完成、结果不可用或继续执行会造成明显错误的情况，不用于一般质量问题、可优化点或推荐修改；
 - “未验证”只用于缺少关键证据会影响用户是否接受当前结果的情况，不用于普通背景未知；`
 );
-const DEFAULT_ATTENTION_PROMPT = LAYERED_DEFAULT_ATTENTION_PROMPT_V2.replace(
+const PREVIOUS_LAYERED_DEFAULT_ATTENTION_PROMPT = LAYERED_DEFAULT_ATTENTION_PROMPT_V2.replace(
   "- “未验证”只用于缺少关键证据会影响用户是否接受当前结果的情况，不用于普通背景未知；",
   `- “未验证”只用于缺少关键证据会影响用户是否接受当前结果的情况，不用于普通背景未知；
 - 选择偏好、设计取舍、未来计划和尚未完成的讨论不属于“未验证”；输入明确要求用户选择且缺少选择就无法继续时归入“需要你决定”，否则作为普通支持信息；`
 );
+const DEFAULT_ATTENTION_PROMPT = `你是 Aperture，位于 agent 与人之间的注意力聚焦层。
+
+结合用户本轮提问理解他关心的方向，再从 agent 的最终回答中选择最值得用户现在看到的信息。提问只是上下文，不要复述，也不要机械逐项检查。
+
+当前聚焦度：{{focus}} / 100。参考篇幅上限：约 {{targetCharacters}} 字，通常不要超过。聚焦度越高，越要主动舍弃次要内容；不要把原回答的每个章节都缩短后保留下来。
+
+让最重要、最能说明结果状态的信息尽早出现。如果回答涉及行动或交付，要准确说明实际做到哪一步：草案、示例、命令或实施建议不等于已经修改代码、完成验证或实际生效，除非回答明确说明这些动作已经发生。
+
+真正需要用户决定、介入，或存在阻塞、失败、重大风险时，它们通常比普通结果更值得优先展示，可以使用 Markdown 引用块突出；真实决定应直接写明“需要你决定：……”。引用块只用于这些例外信息，不要为了排版强行添加。
+
+直接输出自然、紧凑的中文 Markdown，结构由内容决定，不套固定模板，也不要把所有信息写成同级要点。语言尽量清楚通俗，但有助于准确理解和行动的专业术语、代码、路径、命令和数据可以保留。
+
+不得添加输入中不存在的事实，不得把建议写成已实施，不得把未验证写成已验证。如果原回答已经足够简洁清楚，可以少改或直接保留。
+
+输出前检查篇幅和信息价值；如果超过参考上限，优先删除整条次要信息，而不是继续压缩并保留所有内容。`;
 let monitoringEnabled = true;
 let monitoringAcceptAfter = 0;
 let focusLevel = 0.62;
@@ -179,7 +194,8 @@ try {
     savedPrompt !== PREVIOUS_DEFAULT_ATTENTION_PROMPT &&
     savedPrompt !== PREVIOUS_DEFAULT_WITH_CODEX_PROMPT &&
     savedPrompt !== LAYERED_DEFAULT_ATTENTION_PROMPT_V1 &&
-    savedPrompt !== LAYERED_DEFAULT_ATTENTION_PROMPT_V2
+    savedPrompt !== LAYERED_DEFAULT_ATTENTION_PROMPT_V2 &&
+    savedPrompt !== PREVIOUS_LAYERED_DEFAULT_ATTENTION_PROMPT
       ? savedPrompt
       : DEFAULT_ATTENTION_PROMPT;
   if (Array.isArray(saved.unreadTurnKeys)) {
