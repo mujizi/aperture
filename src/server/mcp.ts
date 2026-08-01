@@ -25,7 +25,7 @@ function asToolResult(review: Awaited<ReturnType<EventStore["latestReview"]>>) {
 function createApertureMcpServer(store: EventStore) {
   const server = new McpServer({
     name: "aperture-attention",
-    version: "0.1.0"
+    version: "0.2.0"
   });
 
   server.registerResource(

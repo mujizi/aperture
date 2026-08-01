@@ -8,6 +8,8 @@ app_dir="$build_dir/Aperture.app"
 contents_dir="$app_dir/Contents"
 resources_dir="$contents_dir/Resources"
 icon_work_dir="$build_dir/AppIcon.iconset"
+deployment_target=${MACOSX_DEPLOYMENT_TARGET:-13.0}
+build_arch=${APERTURE_ARCH:-$(uname -m)}
 
 cd "$project_dir"
 npm run build
@@ -16,6 +18,7 @@ rm -rf "$app_dir" "$icon_work_dir"
 mkdir -p "$contents_dir/MacOS" "$resources_dir/runtime" "$icon_work_dir"
 
 swiftc \
+  -target "${build_arch}-apple-macos${deployment_target}" \
   -O \
   -framework AppKit \
   -framework WebKit \

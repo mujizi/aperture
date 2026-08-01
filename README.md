@@ -2,78 +2,215 @@
 
 > 让模型输出适配人的信息带宽。
 
-Aperture 在每轮任务结束后读取清理后的用户提问和完整最终回答，由模型生成一个带焦点、决策门和关系视图的注意力场景。它不是任务类型判定系统，也不要求回答套固定章节。
+[English](README.en.md) · 简体中文
 
-## 工作方式
+Aperture 是一个面向 Codex 的 macOS 注意力伴侣。它在每轮任务结束后读取本轮问题和最终回答，通过 OpenRouter 生成一张可以快速扫读的注意力简报：最重要的结果、需要你决定的事项、真实阻塞，以及最有解释力的流程、对比或指标。
+
+它不会替你运行任务，也不是第二个聊天窗口。它只在 Codex 完成工作后，帮助你更快判断：**发生了什么、是否需要介入、下一步是什么。**
+
+## 快速开始
+
+### 1. 确认环境
+
+当前 `v0.2.0` 预览版需要：
+
+- Apple Silicon Mac（M1/M2/M3/M4 等；暂不支持 Intel Mac）
+- macOS 13 Ventura 或更高版本
+- [Codex](https://openai.com/codex/)；Aperture 监听 `~/.codex/sessions` 中的本地任务记录
+- Node.js 22 或更高版本（推荐当前 LTS）
+- OpenRouter API Key 和一个支持结构化输出的模型
+- 能访问 OpenRouter API 的网络环境
+
+> Codex 中配置的模型不会自动提供给 Aperture。Aperture 当前独立使用 OpenRouter，需要在应用设置中另行配置 Key 和模型。
+
+检查 Node.js：
+
+```bash
+node --version
+```
+
+如果尚未安装，可从 [Node.js 官网](https://nodejs.org/en/download) 安装，或使用 Homebrew：
+
+```bash
+brew install node
+```
+
+### 2. 安装 Aperture
+
+1. 从 [Releases](https://github.com/mujizi/aperture/releases/latest) 下载 `Aperture-v0.2.0-macos-arm64.dmg` 或 `.zip`。
+2. 将 `Aperture.app` 拖入 `/Applications`。
+3. 首次启动时右键点击 Aperture，选择“打开”。
+4. 如果 macOS 仍然拦截，前往“系统设置 → 隐私与安全性”，确认打开。
+
+当前预览包没有 Apple Developer ID 公证，因此首次打开需要手动确认。不要从非本仓库来源下载二次打包版本。
+
+### 3. 配置模型
+
+1. 启动 Aperture：
+
+   ```bash
+   open -a Aperture
+   ```
+
+2. 点击菜单栏中的 Aperture 图标，打开设置。
+3. 选择 OpenRouter 模型并填写 API Key。
+4. 点击连接测试；测试成功后打开“监控”。
+
+Key 只会用于 OpenRouter 请求，并以 `0600` 权限保存在 `~/.aperture/.env`。本地服务只监听 `127.0.0.1:4317`。
+
+### 4. 正常使用 Codex
+
+照常在 Codex 中提问和执行任务。每轮完成后：
+
+- Aperture 自动进入处理状态并显示本轮简报；
+- 左右方向键浏览更早或更新的结果；
+- 调整聚焦度，改变主结果、支持信息和背景信息的视觉权重；
+- 收起为可拖动气泡，点击气泡重新展开；
+- 选中文字后复制，或直接复制整份派生 Markdown。
+
+如果重启 Mac 后需要继续使用，请重新打开 Aperture，或在“系统设置 → 通用 → 登录项”中添加 Aperture。
+
+## Aperture 能帮你做什么
+
+### 把长回答变成可扫读的结果
+
+从完整最终回答中选择唯一主结果，再保留真正影响判断的证据、风险和行动。它不会把原回答的每个章节机械缩短后全部留下。
+
+### 让决定与阻塞显形
+
+只有存在真实选择分叉时才展示 `decision`，只有结果不可用或任务无法继续时才展示 `blocker`，避免把普通建议伪装成紧急事项。
+
+### 按真实关系组织信息
+
+Aperture 根据内容选择合适的表达方式：
+
+- `statement`：独立结论、风险、原因或行动；
+- `flow`：真实的顺序、因果或处理链路；
+- `comparison`：共享维度下的方案或前后对比；
+- `metrics`：数字本身能够解释结果时的指标。
+
+### 在多个任务之间保留完成历史
+
+简报按实际完成时间保存在本地。连续任务或同时运行的多个任务都可以用左右方向键浏览，不需要回到原会话翻找长回答。
+
+## 它如何工作
 
 ```text
-本地 Session 事件 / 可选 Hooks
-            │
-            ▼
-       Local daemon :4317
-            │
-        模型 + 默认提示词
-            │
-            ▼
-       AttentionScene v2
-            │
-      ┌─────┴────────┐
-      ▼              ▼
-MCP Apps 卡片    macOS 悬浮伴侣
+Codex session JSONL（本地）
+          │
+          ▼
+Session Watcher
+          │
+          ├── 清理后的本轮问题
+          └── 完整最终回答
+                    │
+                    ▼
+             OpenRouter 模型
+                    │
+                    ▼
+          AttentionScene v2
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+   macOS 悬浮伴侣        Markdown / MCP
 ```
 
-- 模型通过 JSON Schema 返回一个 spotlight、可选 decision/blocker gate，以及自由选择的 statement、flow、comparison、metrics 视图。
-- 模型输入只有本轮提问、完整最终回答和聚焦度；工具日志与 Aperture 内部事件不会进入模型上下文。
-- Review 同时保存注意力场景和由它派生的兼容 Markdown。
-- 模型未配置、调用失败、超时或返回空内容时，直接展示明确错误；没有规则模式或原文回退。
-- 所有入选信息在一张连续简报中直接显示，无需点击或展开；聚焦度只改变视觉权重，spotlight、真实 gate 和背景信息都不会消失，调整时不重复调用模型。
-- 完成结果按实际完成时间保存在历史中；无需页面按钮，按左方向键查看更早结果，按右方向键返回较新结果。
-- 处理中只显示光圈动画，不显示加载文字。
+模型输入只包含清理后的本轮问题、完整最终回答和聚焦度。工具调用、工具输出和 Aperture 内部事件不会发送给注意力模型。事件、设置和历史结果保存在 `~/.aperture`。
 
-## 在这台 Mac 上使用
+详细协议和接口见 [架构说明](docs/ARCHITECTURE.md)。
 
-原生应用安装在 `/Applications/Aperture.app`，运行时不占用 Dock，只保留菜单栏入口。
+## 隐私与安全
 
-1. 正常进行任意任务；每轮结束后，悬浮窗会进入处理中并展示压缩结果。
-2. 顶栏开关控制监控，下方滑杆控制信息详略，太阳/月亮切换主题，右箭头收起为气泡。
-3. 展开态和气泡都可以拖动；点击气泡重新展开。
-4. 左右方向键浏览所有历史结果，包括连续任务和同时进行的多个任务。
-5. 可选安装 Hooks 以获得额外的生命周期信号；全局 Session Watcher 仍是主要采集通道。
+- 服务只监听本机 loopback 地址，不对局域网开放。
+- OpenRouter Key 不会通过读取 API、结果或 MCP 返回。
+- Key 保存在 `~/.aperture/.env`，文件权限为 `0600`。
+- Codex 原始 session 和 Aperture 历史保留在本地。
+- 发送给 OpenRouter 的内容可能包含你本轮问题与 Codex 最终回答；请勿在不允许第三方模型处理的项目中启用监控。
+- 工具日志当前不进入模型。这降低了噪声和泄露面，但如果关键失败只出现在工具日志、没有写进最终回答，Aperture 也无法自行发现。
 
-密钥只会发送到 OpenRouter，并以 `0600` 权限保存在 `~/.aperture/.env`。本地服务只监听 `127.0.0.1`。
+## 当前限制
 
-手动启动：
+- 仅支持 OpenRouter，不能复用 Codex 的模型认证。
+- 当前发布包仅支持 Apple Silicon。
+- 需要系统中可用的 Node.js 22+；Node 尚未内置到 App。
+- 当前预览包采用临时签名，尚未 Developer ID 签名和 Apple 公证。
+- 内容质量、速度和区域可用性取决于所选 OpenRouter 模型。
+- 模型偶尔可能把并列信息误判为流程或生成不必要的对比。
+- 监控关闭期间完成的任务不会在重新打开后自动补处理。
+
+## 可选 Codex 插件
+
+macOS 伴侣不依赖插件即可工作，因为 Session Watcher 是主要采集通道。仓库中的 `plugins/aperture-attention` 还提供：
+
+- 可选的 Codex 生命周期 Hooks；
+- 读取最新 Aperture 结果的 Skill；
+- 本地 MCP 接口配置。
+
+插件属于高级集成，不是快速开始的必需步骤。
+
+## 从源码构建
+
+开发环境需要 Node.js 22+、npm、Python 3，以及包含 `swiftc` 的 Xcode Command Line Tools。
 
 ```bash
-open -a Aperture
-```
-
-## 开发与验证
-
-```bash
+git clone https://github.com/mujizi/aperture.git
+cd aperture
 npm install
 npm run setup:validator
-npm run build
-npm test
 npm run typecheck
+npm test
+npm run build
 ```
 
-重新构建并安装：
+构建并安装到本机：
 
 ```bash
-npm run install:plugin
 npm run install:mac
 ```
+
+生成 GitHub Release 使用的 `.dmg`、`.zip` 和 SHA-256 校验文件：
+
+```bash
+npm run package:mac
+```
+
+产物位于 `.build/release/`。
+
+## 设计哲学
+
+### 1. 人的注意力才是最终带宽
+
+模型可以生成越来越长的答案，但用户不应该为每一轮工作重新解析完整输出。Aperture 的目标不是生成更多内容，而是决定什么值得现在占用注意力。
+
+### 2. 它是外围伴侣，不是第二个工作台
+
+Aperture 自动出现、零点击阅读、自然滚动，并可以收起为气泡。它不要求用户学习新的导航系统，也不尝试替代 Codex。
+
+### 3. 先忠于语义，再选择视觉形式
+
+流程只表达真实流程，对比只表达共享维度，指标只在数字能够解释结果时出现。开放、不可预测的 Agent 输出仍以文字为主，图形只负责揭示关系。
+
+### 4. 失败必须可见
+
+模型未配置、超时、失败或返回无效内容时，Aperture 显示明确错误，不用规则摘要或原文回退伪装成功。
+
+### 5. 聚焦不是删除事实
+
+聚焦度改变视觉权重，而不是重新调用模型或隐藏真实的决定与阻塞。用户可以降低背景噪声，同时保留已经入选的信息。
+
+### 6. Local-first，但不假装完全离线
+
+采集、存储、历史和展示都在本地；语义压缩当前明确依赖 OpenRouter。系统应清楚展示这条边界，让用户知道哪些数据会离开电脑。
 
 ## 工程目录
 
 ```text
-src/core/                         事件、AttentionScene 与结果类型
-src/server/                       Session Watcher、存储、模型、MCP、HTTP API
-src/web/                          单页注意力简报、关系视图、Markdown 兼容与历史浏览
+src/core/                         事件与 AttentionScene 数据协议
+src/server/                       Session Watcher、存储、模型、MCP 和 HTTP API
+src/web/                          连续简报、关系视图与历史浏览
 native/ApertureCompanion/         macOS 悬浮窗、气泡与菜单栏应用
-plugins/aperture-attention/       可安装插件、Hooks、Skill 与构建产物
-scripts/                          构建、演示和安装脚本
+plugins/aperture-attention/       可选 Hooks、Skill、MCP 与运行时
+scripts/                          构建、安装与发布打包脚本
 ```
 
-详细链路见 [架构说明](docs/ARCHITECTURE.md)；当前实际效果、实验回退与 UI/UX 调研见 [当前状态记录](docs/CURRENT_STATE.md)。
+当前实现状态和已知设计问题见 [CURRENT_STATE.md](docs/CURRENT_STATE.md)。

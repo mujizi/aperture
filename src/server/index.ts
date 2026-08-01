@@ -436,7 +436,7 @@ async function runAnalysis(runId: string, turnId: string | null) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "aperture-attention", version: "0.1.0" });
+  res.json({ ok: true, service: "aperture-attention", version: "0.2.0" });
 });
 
 app.get("/api/config", (_req, res) => {

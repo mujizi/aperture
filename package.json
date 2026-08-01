@@ -1,6 +1,6 @@
 {
   "name": "aperture-attention-layer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "A local-first attention routing layer between coding agents and humans.",
@@ -12,6 +12,7 @@
     "build": "npm run build:web && npm run build:server && npm run validate:plugin",
     "build:mac": "scripts/build-macos-app.sh",
     "install:mac": "scripts/install-macos-app.sh",
+    "package:mac": "scripts/package-macos.sh",
     "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",
     "setup:validator": "python3 -m venv .venv && .venv/bin/pip install pyyaml",
