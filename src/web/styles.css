@@ -781,32 +781,43 @@ a:focus-visible {
 }
 
 .semantic-mark {
-  margin: 0 -1px;
-  padding: 1px 2px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--tone-key) 18%, transparent);
-  box-shadow: inset 0 -1px color-mix(in srgb, var(--tone-key) 52%, transparent);
-  color: inherit;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--minimal-text);
+  font-weight: 620;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 0.2em;
+}
+
+.semantic-mark--key {
+  font-weight: 660;
 }
 
 .semantic-mark--change {
-  background: color-mix(in srgb, var(--tone-change) 18%, transparent);
-  box-shadow: inset 0 -1px color-mix(in srgb, var(--tone-change) 55%, transparent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--tone-change) 68%, transparent);
+  text-decoration-thickness: 1.5px;
 }
 
 .semantic-mark--decision {
-  background: color-mix(in srgb, var(--tone-decision) 20%, transparent);
-  box-shadow: inset 0 -1px color-mix(in srgb, var(--tone-decision) 58%, transparent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--tone-decision) 76%, transparent);
+  text-decoration-thickness: 2px;
 }
 
 .semantic-mark--risk {
-  background: color-mix(in srgb, var(--tone-risk) 18%, transparent);
-  box-shadow: inset 0 -1px color-mix(in srgb, var(--tone-risk) 55%, transparent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--tone-risk) 76%, transparent);
+  text-decoration-thickness: 2px;
 }
 
 .semantic-mark--verified {
-  background: color-mix(in srgb, var(--tone-verified) 18%, transparent);
-  box-shadow: inset 0 -1px color-mix(in srgb, var(--tone-verified) 55%, transparent);
+  font-weight: 620;
 }
 
 .scene-flow ol {

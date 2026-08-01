@@ -237,7 +237,10 @@ highlights 仅用于给少量关键短语增加轻微字重，不会用彩色背
 const PREVIOUS_STRICT_ATTENTION_PROMPT = `${PREVIOUS_DENSITY_ATTENTION_PROMPT}
 
 严格按关系选视图：只有各步骤必须按顺序阅读，或存在明确因果、输入输出关系时才使用 flow；一组并列功能、改动或特性不是流程。回答明确描述旧版与新版、两个方案或两个状态，并能沿共同维度比较时，优先使用 comparison。输出前逐条检查 views：如果某条只是复述 spotlight 或 gate，删除它，不要靠改写句子保留重复内容。`;
-const DEFAULT_ATTENTION_PROMPT = PREVIOUS_CONTINUOUS_ATTENTION_PROMPT;
+const DEFAULT_ATTENTION_PROMPT = PREVIOUS_CONTINUOUS_ATTENTION_PROMPT.replace(
+  "highlights 只标记原句中最值得扫读的 1–3 个完整短语，并保持原文完全一致：关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要用颜色装饰普通词，也不要依赖加粗表达全部层次。",
+  "highlights 是稀缺的编辑标注，只选择原句中真正影响扫读的完整短语并保持原文完全一致：spotlight 使用 0–2 个，每个 statement 使用 0–1 个，整个场景不超过 4 个。关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要标记普通名词、泛泛的完成表述或已经由 gate、flow、comparison、metrics 结构清楚表达的信息；主要层次来自顺序、语义角色和 attention，而不是划词数量。"
+);
 let monitoringEnabled = true;
 let monitoringAcceptAfter = 0;
 let focusLevel = 0.62;

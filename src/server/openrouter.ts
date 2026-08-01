@@ -304,20 +304,27 @@ const ATTENTION_SCENE_JSON_SCHEMA = {
   required: ["version", "spotlight", "gate", "views"]
 } as const;
 
-function normalizeHighlights(text: string, highlights: TextHighlight[]) {
+function normalizeHighlights(
+  text: string,
+  highlights: TextHighlight[],
+  limit: number
+) {
   const seen = new Set<string>();
   return highlights.filter((highlight) => {
     if (!text.includes(highlight.phrase) || seen.has(highlight.phrase)) return false;
     seen.add(highlight.phrase);
     return true;
-  }).slice(0, 3);
+  }).slice(0, Math.max(0, limit));
 }
 
-function normalizeVisualNode(node: VisualNode): VisualNode {
+function normalizeVisualNode(
+  node: VisualNode,
+  highlightLimit: number
+): VisualNode {
   if (node.kind !== "statement") return node;
   return {
     ...node,
-    highlights: normalizeHighlights(node.text, node.highlights)
+    highlights: normalizeHighlights(node.text, node.highlights, highlightLimit)
   };
 }
 
@@ -347,22 +354,32 @@ function normalizeAttentionScene(scene: AttentionScene) {
   const gate = scene.gate.kind === "none"
     ? { kind: "none" as const, title: "", detail: "", options: [] }
     : scene.gate;
+  const spotlightHighlights = normalizeHighlights(
+    scene.spotlight.text,
+    scene.spotlight.highlights,
+    2
+  );
+  let remainingHighlights = 4 - spotlightHighlights.length;
   const seenLabels = new Set<string>();
   const views = scene.views.flatMap((node) => {
     if (seenLabels.has(node.label) || repeatsExistingPriorityContent(node, scene)) {
       return [];
     }
     seenLabels.add(node.label);
-    return [normalizeVisualNode(node)];
+    const normalized = normalizeVisualNode(
+      node,
+      Math.min(1, remainingHighlights)
+    );
+    if (normalized.kind === "statement") {
+      remainingHighlights -= normalized.highlights.length;
+    }
+    return [normalized];
   });
   return {
     ...scene,
     spotlight: {
       ...scene.spotlight,
-      highlights: normalizeHighlights(
-        scene.spotlight.text,
-        scene.spotlight.highlights
-      )
+      highlights: spotlightHighlights
     },
     gate,
     views

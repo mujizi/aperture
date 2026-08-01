@@ -169,4 +169,88 @@ describe("OpenRouter attention scene output", () => {
       ]);
     }
   });
+
+  it("limits editorial highlights across the whole scene", async () => {
+    const scene = {
+      version: 2,
+      spotlight: {
+        label: "核心结果",
+        text: "输入、输出和风险都已梳理。",
+        status: "done",
+        highlights: [
+          { phrase: "输入", tone: "key" },
+          { phrase: "输出", tone: "change" },
+          { phrase: "风险", tone: "risk" }
+        ]
+      },
+      gate: { kind: "none", title: "", detail: "", options: [] },
+      views: [
+        {
+          kind: "statement",
+          label: "实现变化",
+          attention: "supporting",
+          status: "done",
+          tone: "change",
+          text: "界面已经更新并完成安装。",
+          highlights: [
+            { phrase: "已经更新", tone: "change" },
+            { phrase: "完成安装", tone: "verified" }
+          ]
+        },
+        {
+          kind: "statement",
+          label: "验证信息",
+          attention: "supporting",
+          status: "done",
+          tone: "verified",
+          text: "测试和健康检查均已通过。",
+          highlights: [
+            { phrase: "测试", tone: "verified" },
+            { phrase: "健康检查", tone: "verified" }
+          ]
+        },
+        {
+          kind: "statement",
+          label: "背景信息",
+          attention: "context",
+          status: "none",
+          tone: "neutral",
+          text: "旧版记录仍然可以读取。",
+          highlights: [{ phrase: "仍然可以读取", tone: "key" }]
+        }
+      ]
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify(scene) } }]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+
+    const result = await analyzeWithOpenRouter(
+      {
+        apiKey: "test-key-value",
+        model: "test/model",
+        timeoutMs: 1000
+      },
+      { question: "改动结果如何", answer: "完整回答" }
+    );
+
+    expect(result?.spotlight.highlights).toHaveLength(2);
+    const statementHighlights = result?.views.flatMap((view) =>
+      view.kind === "statement" ? view.highlights : []
+    ) ?? [];
+    expect(statementHighlights).toEqual([
+      { phrase: "已经更新", tone: "change" },
+      { phrase: "测试", tone: "verified" }
+    ]);
+    expect(
+      (result?.spotlight.highlights.length ?? 0) + statementHighlights.length
+    ).toBe(4);
+  });
 });

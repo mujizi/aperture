@@ -103,7 +103,7 @@ decision 和 blocker 以独立 gate 呈现，无论聚焦度如何都不会隐�
 
 - 空间与大小表达“焦点 / 上下文”，避免只依赖粗体。
 - spotlight 背后的轻量光晕保留 Aperture 的视觉语言，但不承担导航功能。
-- 语义颜色只标记变化、决定、风险和已验证事实；高亮短语必须原样存在于正文。
+- 高亮短语必须原样存在于正文；key 与 verified 只增加中性字重，语义颜色细线仅标记 change、decision 和 risk。spotlight 最多 2 个、每个 statement 最多 1 个、全场景最多 4 个。
 - `flow` 使用带连接线的步骤轨迹，`comparison` 使用共享维度矩阵，`metrics` 使用数值卡片，`statement` 保留自然语言。
 - 路径、链接、命令和工具记录不单独形成视图，除非直接影响用户行动。
 
