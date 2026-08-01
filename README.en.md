@@ -6,7 +6,7 @@
 
 <p align="center">The attention layer between human input bandwidth and model output bandwidth.</p>
 
-<p align="center"><strong>EN</strong> · <a href="README.cn.md">CN</a></p>
+<p align="center"><a href="README.md">CN</a> · <strong>EN</strong></p>
 
 Aperture is a macOS attention layer between human input bandwidth and model output bandwidth. After Codex completes a turn, it remaps the complete final answer into an `AttentionScene` that a person can absorb quickly: the primary outcome, genuine decisions, blockers, and the relationships and context that still matter.
 

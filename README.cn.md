@@ -6,7 +6,7 @@
 
 <p align="center">人类输入带宽与大模型输出带宽之间的注意力中间层。</p>
 
-<p align="center"><a href="README.en.md">EN</a> · <strong>CN</strong></p>
+<p align="center"><strong>CN</strong> · <a href="README.en.md">EN</a></p>
 
 Aperture 是位于人类输入带宽与大模型输出带宽之间的 macOS 注意力中间层。Codex 完成一轮工作后，它把完整最终回答重新映射为适合人快速接收的 `AttentionScene`：主结果、真实决定、阻塞，以及必要的关系和背景。
 
