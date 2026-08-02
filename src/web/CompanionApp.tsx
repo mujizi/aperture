@@ -300,15 +300,14 @@ export function CompanionApp() {
       {!monitoring && (
         <section className="minimal-status">
           <MinimalSignal processing={false} />
-          <h1>已暂停</h1>
-          <p>监控已关闭。</p>
+          <h1 lang="en">paused</h1>
         </section>
       )}
 
       {monitoring && phase === "waiting" && (
         <section className="minimal-status">
           <MinimalSignal processing={false} />
-          <h1>wait</h1>
+          <h1 lang="en">wait</h1>
         </section>
       )}
 
