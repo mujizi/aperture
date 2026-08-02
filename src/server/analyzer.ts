@@ -43,13 +43,18 @@ function turnContext(events: AgentEvent[]) {
 }
 
 function modelFailureReason(error: string | null, openRouter: OpenRouterConfig) {
-  if (!openRouter.apiKey) return "OpenRouter API Key 尚未配置";
-  if (!openRouter.model) return "分析模型尚未配置";
+  const english = openRouter.language === "en";
+  if (!openRouter.apiKey) return english
+    ? "OpenRouter API key is not configured"
+    : "OpenRouter API Key 尚未配置";
+  if (!openRouter.model) return english ? "Analysis model is not configured" : "分析模型尚未配置";
   if (/not available in your region/i.test(error ?? "")) {
-    return `模型 ${openRouter.model} 在当前区域不可用`;
+    return english
+      ? `Model ${openRouter.model} is not available in your region`
+      : `模型 ${openRouter.model} 在当前区域不可用`;
   }
-  if (/abort|timeout|timed out/i.test(error ?? "")) return "模型调用超时";
-  return error?.trim().slice(0, 240) || "模型没有返回可用结果";
+  if (/abort|timeout|timed out/i.test(error ?? "")) return english ? "Model request timed out" : "模型调用超时";
+  return error?.trim().slice(0, 240) || (english ? "The model returned no usable result" : "模型没有返回可用结果");
 }
 
 function review(
@@ -67,6 +72,7 @@ function review(
     projectName: context.projectName,
     projectPath: context.projectPath,
     generatedAt: new Date().toISOString(),
+    language: openRouter.language ?? "cn",
     sourceCompletedAt: context.completedAt,
     attentionScene,
     resultMarkdown,
@@ -93,7 +99,7 @@ export async function analyzeEvents(
     if (scene) {
       return review(
         context,
-        attentionSceneToMarkdown(scene),
+        attentionSceneToMarkdown(scene, openRouter.language ?? "cn"),
         openRouter,
         started,
         null,
@@ -101,9 +107,12 @@ export async function analyzeEvents(
       );
     }
     const reason = modelFailureReason(null, openRouter);
+    const failure = openRouter.language === "en"
+      ? `Model request failed, so no result was generated.\n\n${reason}. Check or change the model in Settings, then try again.`
+      : `模型调用失败，未生成本轮结果。\n\n${reason}。请在设置中检查或更换模型后重试。`;
     return review(
       context,
-      `模型调用失败，未生成本轮结果。\n\n${reason}。请在设置中检查或更换模型后重试。`,
+      failure,
       openRouter,
       started,
       reason
@@ -114,9 +123,12 @@ export async function analyzeEvents(
         ? analysisError.message
         : String(analysisError);
     const reason = modelFailureReason(error, openRouter);
+    const failure = openRouter.language === "en"
+      ? `Model request failed, so no result was generated.\n\n${reason}. Check or change the model in Settings, then try again.`
+      : `模型调用失败，未生成本轮结果。\n\n${reason}。请在设置中检查或更换模型后重试。`;
     return review(
       context,
-      `模型调用失败，未生成本轮结果。\n\n${reason}。请在设置中检查或更换模型后重试。`,
+      failure,
       openRouter,
       started,
       error

@@ -8,6 +8,7 @@ import {
   TriangleAlert
 } from "lucide-react";
 import type {
+  AppLanguage,
   AttentionScene,
   ComparisonVisualNode,
   FlowVisualNode,
@@ -17,12 +18,15 @@ import type {
   TextHighlight,
   VisualNode
 } from "../core/types";
+import { ui } from "./i18n";
 
-const statusLabels: Partial<Record<SceneStatus, string>> = {
-  partial: "部分完成",
-  proposed: "方案",
-  unverified: "未验证"
-};
+function statusLabel(status: SceneStatus, language: AppLanguage) {
+  const labels = ui(language);
+  return status === "partial" ? labels.partial
+    : status === "proposed" ? labels.proposed
+    : status === "unverified" ? labels.unverified
+    : undefined;
+}
 
 function MarkedText({
   text,
@@ -61,8 +65,8 @@ function MarkedText({
   );
 }
 
-function StatusChip({ status }: { status: SceneStatus }) {
-  const label = statusLabels[status];
+function StatusChip({ status, language }: { status: SceneStatus; language: AppLanguage }) {
+  const label = statusLabel(status, language);
   if (!label) return null;
   return <span className={`scene-status scene-status--${status}`}>{label}</span>;
 }
@@ -76,7 +80,7 @@ function NodeIcon({ kind, size = 15 }: { kind: VisualNode["kind"]; size?: number
   return <MessageSquareText aria-hidden="true" size={size} />;
 }
 
-function SceneGateView({ scene }: { scene: AttentionScene }) {
+function SceneGateView({ scene, language }: { scene: AttentionScene; language: AppLanguage }) {
   if (scene.gate.kind === "none") return null;
   const blocker = scene.gate.kind === "blocker";
   return (
@@ -87,12 +91,12 @@ function SceneGateView({ scene }: { scene: AttentionScene }) {
         ) : (
           <CircleDotDashed aria-hidden="true" size={14} />
         )}
-        {blocker ? "阻塞" : "需要你决定"}
+        {blocker ? ui(language).blocker : ui(language).decision}
       </header>
       <div className="scene-gate-title">{scene.gate.title}</div>
       {scene.gate.detail && <p>{scene.gate.detail}</p>}
       {scene.gate.options.length > 0 && (
-        <div className="scene-gate-options" aria-label="可选方向">
+        <div className="scene-gate-options" aria-label={ui(language).options}>
           {scene.gate.options.map((option) => (
             <span key={option}>{option}</span>
           ))}
@@ -102,31 +106,31 @@ function SceneGateView({ scene }: { scene: AttentionScene }) {
   );
 }
 
-function SceneHeader({ node }: { node: VisualNode }) {
+function SceneHeader({ node, language }: { node: VisualNode; language: AppLanguage }) {
   return (
     <header className="scene-view-header">
       <span className={`scene-kind scene-kind--${node.tone}`}>
         <NodeIcon kind={node.kind} />
       </span>
       <h2>{node.label}</h2>
-      <StatusChip status={node.status} />
+      <StatusChip status={node.status} language={language} />
     </header>
   );
 }
 
-function StatementView({ node }: { node: StatementVisualNode }) {
+function StatementView({ node, language }: { node: StatementVisualNode; language: AppLanguage }) {
   return (
     <section className={`scene-view scene-statement brief-view brief-view--${node.attention}`}>
-      <SceneHeader node={node} />
+      <SceneHeader node={node} language={language} />
       <p><MarkedText text={node.text} highlights={node.highlights} /></p>
     </section>
   );
 }
 
-function FlowView({ node }: { node: FlowVisualNode }) {
+function FlowView({ node, language }: { node: FlowVisualNode; language: AppLanguage }) {
   return (
     <section className={`scene-view scene-flow brief-view brief-view--${node.attention}`}>
-      <SceneHeader node={node} />
+      <SceneHeader node={node} language={language} />
       <ol>
         {node.steps.map((step, index) => (
           <li className={`scene-tone--${step.tone}`} key={`${index}:${step.label}`}>
@@ -142,12 +146,12 @@ function FlowView({ node }: { node: FlowVisualNode }) {
   );
 }
 
-function ComparisonView({ node }: { node: ComparisonVisualNode }) {
+function ComparisonView({ node, language }: { node: ComparisonVisualNode; language: AppLanguage }) {
   return (
     <section className={`scene-view scene-comparison brief-view brief-view--${node.attention}`}>
-      <SceneHeader node={node} />
+      <SceneHeader node={node} language={language} />
       <div className="comparison-grid" role="table" aria-label={node.label}>
-        <div className="comparison-head comparison-axis" role="columnheader">对比项</div>
+        <div className="comparison-head comparison-axis" role="columnheader">{ui(language).comparison}</div>
         <div className="comparison-head" role="columnheader">{node.leftLabel}</div>
         <div className="comparison-head comparison-head--current" role="columnheader">{node.rightLabel}</div>
         {node.rows.map((row) => (
@@ -165,10 +169,10 @@ function ComparisonView({ node }: { node: ComparisonVisualNode }) {
   );
 }
 
-function MetricsView({ node }: { node: MetricsVisualNode }) {
+function MetricsView({ node, language }: { node: MetricsVisualNode; language: AppLanguage }) {
   return (
     <section className={`scene-view scene-metrics brief-view brief-view--${node.attention}`}>
-      <SceneHeader node={node} />
+      <SceneHeader node={node} language={language} />
       <div className="metric-grid">
         {node.items.map((item) => (
           <div className={`metric-card scene-tone--${item.tone}`} key={item.label}>
@@ -181,20 +185,20 @@ function MetricsView({ node }: { node: MetricsVisualNode }) {
   );
 }
 
-function VisualNodeView({ node }: { node: VisualNode }) {
-  if (node.kind === "flow") return <FlowView node={node} />;
-  if (node.kind === "comparison") return <ComparisonView node={node} />;
-  if (node.kind === "metrics") return <MetricsView node={node} />;
-  return <StatementView node={node} />;
+function VisualNodeView({ node, language }: { node: VisualNode; language: AppLanguage }) {
+  if (node.kind === "flow") return <FlowView node={node} language={language} />;
+  if (node.kind === "comparison") return <ComparisonView node={node} language={language} />;
+  if (node.kind === "metrics") return <MetricsView node={node} language={language} />;
+  return <StatementView node={node} language={language} />;
 }
 
-function SpotlightView({ scene }: { scene: AttentionScene }) {
-  const statusLabel = statusLabels[scene.spotlight.status];
+function SpotlightView({ scene, language }: { scene: AttentionScene; language: AppLanguage }) {
+  const label = statusLabel(scene.spotlight.status, language);
   return (
     <section className="brief-spotlight">
-      {statusLabel && (
+      {label && (
         <header className="brief-spotlight-meta">
-          <StatusChip status={scene.spotlight.status} />
+          <StatusChip status={scene.spotlight.status} language={language} />
         </header>
       )}
       <h1>{scene.spotlight.label}</h1>
@@ -205,10 +209,12 @@ function SpotlightView({ scene }: { scene: AttentionScene }) {
 
 export function ApertureSceneView({
   scene,
-  focusLevel
+  focusLevel,
+  language = "cn"
 }: {
   scene: AttentionScene;
   focusLevel: number;
+  language?: AppLanguage;
 }) {
   const focusBand = focusLevel > 0.78 ? "high" : focusLevel > 0.45 ? "medium" : "balanced";
   const blocker = scene.gate.kind === "blocker";
@@ -217,13 +223,13 @@ export function ApertureSceneView({
       className={`aperture-brief aperture-brief--${focusBand}`}
       data-focus-band={focusBand}
     >
-      {blocker && <SceneGateView scene={scene} />}
-      <SpotlightView scene={scene} />
-      {!blocker && <SceneGateView scene={scene} />}
+      {blocker && <SceneGateView scene={scene} language={language} />}
+      <SpotlightView scene={scene} language={language} />
+      {!blocker && <SceneGateView scene={scene} language={language} />}
       {scene.views.length > 0 && (
-        <div className="brief-views" aria-label="完整注意力简报">
+        <div className="brief-views" aria-label={ui(language).completeBrief}>
           {scene.views.map((node, index) => (
-            <VisualNodeView node={node} key={`${index}:${node.kind}:${node.label}`} />
+            <VisualNodeView node={node} language={language} key={`${index}:${node.kind}:${node.label}`} />
           ))}
         </div>
       )}

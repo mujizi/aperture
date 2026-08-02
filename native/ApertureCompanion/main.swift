@@ -1,5 +1,6 @@
 import AppKit
 import CFNetwork
+import Darwin
 import QuartzCore
 import WebKit
 
@@ -7,6 +8,7 @@ private let apertureURL = URL(string: "http://127.0.0.1:4317/?surface=companion"
 private let reviewURL = URL(string: "http://127.0.0.1:4317/api/review/current")!
 private let monitoringURL = URL(string: "http://127.0.0.1:4317/api/monitoring")!
 private let focusURL = URL(string: "http://127.0.0.1:4317/api/focus")!
+private let languageURL = URL(string: "http://127.0.0.1:4317/api/language")!
 private let promptURL = URL(string: "http://127.0.0.1:4317/api/prompt")!
 private let configURL = URL(string: "http://127.0.0.1:4317/api/config")!
 private let configSecretURL = URL(string: "http://127.0.0.1:4317/api/config/secret")!
@@ -15,11 +17,26 @@ private let modelTestURL = URL(string: "http://127.0.0.1:4317/api/config/test")!
 private let inboxSeenURL = URL(string: "http://127.0.0.1:4317/api/inbox/seen")!
 private let healthURL = URL(string: "http://127.0.0.1:4317/api/health")!
 private let defaultExpandedSize = NSSize(width: 343, height: 726)
+private let languageChangedNotification = Notification.Name(
+    "ApertureLanguageChanged"
+)
+
+private enum AppLanguage: String, Codable {
+    case cn
+    case en
+
+    var isEnglish: Bool { self == .en }
+
+    func text(_ cn: String, _ en: String) -> String {
+        isEnglish ? en : cn
+    }
+}
 
 private struct ReviewEnvelope: Decodable {
     let review: ReviewSummary?
     let monitoring: MonitoringSummary?
     let focus: FocusSummary?
+    let language: LanguageSummary?
     let prompt: PromptSummary?
     let inbox: InboxSummary?
 }
@@ -30,6 +47,15 @@ private struct MonitoringSummary: Decodable {
 
 private struct FocusSummary: Decodable {
     let level: Double
+}
+
+private struct LanguageSummary: Decodable {
+    let value: AppLanguage
+}
+
+private struct LanguageUpdateEnvelope: Decodable {
+    let language: LanguageSummary
+    let prompt: PromptSummary
 }
 
 private struct PromptSummary: Decodable {
@@ -80,6 +106,12 @@ private struct ModelTestEnvelope: Decodable {
 
 private struct APIErrorEnvelope: Decodable {
     let error: String
+}
+
+private struct HealthEnvelope: Decodable {
+    let ok: Bool
+    let service: String
+    let capabilities: [String]?
 }
 
 private struct AttentionState {
@@ -193,6 +225,7 @@ private final class CompactActionButton: NSButton {
 }
 
 private final class PromptTextView: NSTextView {
+    var language: AppLanguage = .cn
     var onSave: (() -> Void)?
     var onCancel: (() -> Void)?
 
@@ -220,26 +253,26 @@ private final class PromptTextView: NSTextView {
         let menu = NSMenu()
         if isEditable {
             menu.addItem(NSMenuItem(
-                title: "剪切",
+                title: language.text("剪切", "Cut"),
                 action: #selector(NSText.cut(_:)),
                 keyEquivalent: ""
             ))
         }
         menu.addItem(NSMenuItem(
-            title: "复制",
+            title: language.text("复制", "Copy"),
             action: #selector(NSText.copy(_:)),
             keyEquivalent: ""
         ))
         if isEditable {
             menu.addItem(NSMenuItem(
-                title: "粘贴",
+                title: language.text("粘贴", "Paste"),
                 action: #selector(NSText.paste(_:)),
                 keyEquivalent: ""
             ))
         }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
-            title: "全选",
+            title: language.text("全选", "Select All"),
             action: #selector(NSText.selectAll(_:)),
             keyEquivalent: ""
         ))
@@ -389,6 +422,13 @@ private final class ApertureMarkView: NSView {
 
 private final class SettingsViewController: NSViewController, NSTextViewDelegate {
     private let titleLabel = NSTextField(labelWithString: "设置")
+    private let languageLabel = NSTextField(labelWithString: "语言")
+    private let languageControl = NSSegmentedControl(
+        labels: ["中文", "English"],
+        trackingMode: .selectOne,
+        target: nil,
+        action: nil
+    )
     private let focusLabel = NSTextField(labelWithString: "聚焦")
     private let focusSlider = NSSlider(
         value: 0.62,
@@ -455,13 +495,14 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         title: "保存",
         symbol: "checkmark"
     )
-    private let sizeChoices = [
-        (16, "16 · 紧凑"),
-        (18, "18 · 舒适"),
-        (20, "20 · 大"),
-        (22, "22 · 特大"),
-        (24, "24 · 最大")
-    ]
+    private var sizeChoices: [(Int, String)] {
+        language.isEnglish
+            ? [(16, "16 · Compact"), (18, "18 · Comfortable"),
+               (20, "20 · Large"), (22, "22 · Extra large"), (24, "24 · Largest")]
+            : [(16, "16 · 紧凑"), (18, "18 · 舒适"),
+               (20, "20 · 大"), (22, "22 · 特大"), (24, "24 · 最大")]
+    }
+    private var language: AppLanguage
     private var isDark: Bool
     private var readerSize: Int
     private var showsKey = false
@@ -473,25 +514,30 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     private var themeHandler: ((Bool) -> Void)?
     private var sizeHandler: ((Int) -> Void)?
     private var promptHandler: ((String) -> Void)?
+    private var languageHandler: ((AppLanguage) -> Void)?
 
     init(
         focusLevel: Double,
         isDark: Bool,
         readerSize: Int,
+        language: AppLanguage,
         prompt: String,
         onFocusChanged: @escaping (Double) -> Void,
         onThemeChanged: @escaping (Bool) -> Void,
         onSizeChanged: @escaping (Int) -> Void,
+        onLanguageChanged: @escaping (AppLanguage) -> Void,
         onPromptChanged: @escaping (String) -> Void
     ) {
         self.isDark = isDark
         self.readerSize = readerSize
+        self.language = language
         super.init(nibName: nil, bundle: nil)
         focusSlider.doubleValue = min(1, max(0, focusLevel))
         promptEditor.string = prompt
         focusHandler = onFocusChanged
         themeHandler = onThemeChanged
         sizeHandler = onSizeChanged
+        languageHandler = onLanguageChanged
         promptHandler = onPromptChanged
     }
 
@@ -512,6 +558,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         root.addSubview(titleLabel)
 
         let labels = [
+            languageLabel,
             focusLabel,
             appearanceLabel,
             sizeLabel,
@@ -525,6 +572,14 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             label.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
             root.addSubview(label)
         }
+
+        languageControl.translatesAutoresizingMaskIntoConstraints = false
+        languageControl.controlSize = .regular
+        languageControl.segmentStyle = .rounded
+        languageControl.selectedSegment = language == .en ? 1 : 0
+        languageControl.target = self
+        languageControl.action = #selector(changeLanguage)
+        root.addSubview(languageControl)
         promptStatus.translatesAutoresizingMaskIntoConstraints = false
         promptStatus.font = NSFont.monospacedDigitSystemFont(
             ofSize: 12,
@@ -697,7 +752,13 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            focusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 26),
+            languageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 24),
+            languageLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            languageControl.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            languageControl.centerYAnchor.constraint(equalTo: languageLabel.centerYAnchor),
+            languageControl.widthAnchor.constraint(equalToConstant: 166),
+
+            focusLabel.topAnchor.constraint(equalTo: languageLabel.bottomAnchor, constant: 24),
             focusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             focusSlider.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
             focusSlider.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
@@ -772,6 +833,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         ])
 
         applyTheme()
+        applyLanguage()
         setPromptEditing(false)
         loadModelConfig()
     }
@@ -814,6 +876,13 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         }
     }
 
+    func setLanguage(_ value: AppLanguage) {
+        guard language != value else { return }
+        language = value
+        languageControl.selectedSegment = value == .en ? 1 : 0
+        applyLanguage()
+    }
+
     private func updatePromptFont() {
         promptEditor.font = NSFont.systemFont(
             ofSize: max(15, CGFloat(readerSize - 2)),
@@ -833,6 +902,12 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
 
     @objc private func changeFocus() {
         focusHandler?(focusSlider.doubleValue)
+    }
+
+    @objc private func changeLanguage() {
+        language = languageControl.selectedSegment == 1 ? .en : .cn
+        applyLanguage()
+        languageHandler?(language)
     }
 
     @objc private func changeAppearance() {
@@ -906,7 +981,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     }
 
     private func fetchModels() {
-        setModelStatus("正在拉取模型…", success: nil)
+        setModelStatus(language.text("正在拉取模型…", "Loading models…"), success: nil)
         postJSON(url: modelsURL, body: requestBody()) { [weak self] data, response in
             guard let self else { return }
             guard
@@ -918,7 +993,10 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
                     from: data
                 )
             else {
-                self.showAPIError(data, fallback: "模型列表拉取失败")
+                self.showAPIError(
+                    data,
+                    fallback: self.language.text("模型列表拉取失败", "Could not load models")
+                )
                 return
             }
             DispatchQueue.main.async {
@@ -929,7 +1007,10 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
                 )
                 self.modelCombo.stringValue = selected
                 self.setModelStatus(
-                    "已载入 \(payload.models.count) 个模型",
+                    self.language.text(
+                        "已载入 \(payload.models.count) 个模型",
+                        "Loaded \(payload.models.count) models"
+                    ),
                     success: true
                 )
             }
@@ -940,10 +1021,10 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         guard !modelCombo.stringValue.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty else {
-            setModelStatus("请先选择模型", success: false)
+            setModelStatus(language.text("请先选择模型", "Select a model first"), success: false)
             return
         }
-        setModelStatus("正在测试模型…", success: nil)
+        setModelStatus(language.text("正在测试模型…", "Testing model…"), success: nil)
         postJSON(url: modelTestURL, body: requestBody()) { [weak self] data, response in
             guard let self else { return }
             guard
@@ -956,12 +1037,18 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
                 ),
                 payload.ok
             else {
-                self.showAPIError(data, fallback: "模型测试失败")
+                self.showAPIError(
+                    data,
+                    fallback: self.language.text("模型测试失败", "Model test failed")
+                )
                 return
             }
             DispatchQueue.main.async {
                 self.setModelStatus(
-                    "可用 · \(payload.latencyMs) ms",
+                    self.language.text(
+                        "可用 · \(payload.latencyMs) ms",
+                        "Available · \(payload.latencyMs) ms"
+                    ),
                     success: true
                 )
             }
@@ -972,24 +1059,30 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         guard !modelCombo.stringValue.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty else {
-            setModelStatus("请先选择模型", success: false)
+            setModelStatus(language.text("请先选择模型", "Select a model first"), success: false)
             return
         }
-        setModelStatus("正在保存…", success: nil)
+        setModelStatus(language.text("正在保存…", "Saving…"), success: nil)
         postJSON(url: configURL, body: requestBody()) { [weak self] data, response in
             guard let self else { return }
             guard
                 let response,
                 (200..<300).contains(response.statusCode)
             else {
-                self.showAPIError(data, fallback: "模型配置保存失败")
+                self.showAPIError(
+                    data,
+                    fallback: self.language.text("模型配置保存失败", "Could not save model settings")
+                )
                 return
             }
             DispatchQueue.main.async {
                 self.apiKeyConfigured =
                     self.apiKeyConfigured || !self.currentKey().isEmpty
                 self.updateKeyPlaceholder()
-                self.setModelStatus("配置已保存", success: true)
+                self.setModelStatus(
+                    self.language.text("配置已保存", "Settings saved"),
+                    success: true
+                )
             }
         }
     }
@@ -1019,7 +1112,9 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     }
 
     private func updateKeyPlaceholder() {
-        let placeholder = apiKeyConfigured ? "已保存；输入可替换" : "填写 Key"
+        let placeholder = apiKeyConfigured
+            ? language.text("已保存；输入可替换", "Saved; enter a value to replace")
+            : language.text("填写 Key", "Enter key")
         secureKeyField.placeholderString = placeholder
         visibleKeyField.placeholderString = placeholder
     }
@@ -1060,14 +1155,14 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         promptBeforeEditing = value
         promptHandler?(value)
         setPromptEditing(false)
-        showPromptStatus("已保存")
+        showPromptStatus(language.text("已保存", "Saved"))
     }
 
     private func cancelPromptEditing() {
         guard isEditingPrompt else { return }
         promptEditor.string = promptBeforeEditing
         setPromptEditing(false)
-        showPromptStatus("已取消")
+        showPromptStatus(language.text("已取消", "Cancelled"))
     }
 
     private func copyPrompt() {
@@ -1079,7 +1174,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         guard !value.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
-        showPromptStatus("已复制")
+        showPromptStatus(language.text("已复制", "Copied"))
     }
 
     private func selectAllPrompt() {
@@ -1107,11 +1202,11 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         let count = promptEditor.string.count
         if isEditingPrompt {
             promptStatus.stringValue = count > 4000
-                ? "超出 \(count - 4000) 字"
+                ? language.text("超出 \(count - 4000) 字", "\(count - 4000) over limit")
                 : "\(count) / 4000"
             savePromptButton.isEnabled = count <= 4000
         } else {
-            promptStatus.stringValue = "\(count) 字"
+            promptStatus.stringValue = language.text("\(count) 字", "\(count) characters")
             savePromptButton.isEnabled = true
         }
     }
@@ -1147,6 +1242,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         ).cgColor
         for label in [
             titleLabel,
+            languageLabel,
             focusLabel,
             appearanceLabel,
             sizeLabel,
@@ -1196,6 +1292,93 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         if !modelStatus.stringValue.isEmpty {
             setModelStatus(modelStatus.stringValue, success: nil)
         }
+    }
+
+    private func applyLanguage() {
+        titleLabel.stringValue = language.text("设置", "Settings")
+        languageLabel.stringValue = language.text("语言", "Language")
+        focusLabel.stringValue = language.text("聚焦", "Focus")
+        appearanceLabel.stringValue = language.text("外观", "Appearance")
+        sizeLabel.stringValue = language.text("字号", "Text size")
+        modelLabel.stringValue = language.text("模型", "Model")
+        focusSlider.toolTip = language.text(
+            "向左保留更多细节，向右只看核心信息",
+            "Move left for more detail, right for only the essentials"
+        )
+        focusSlider.setAccessibilityLabel(language.text("聚焦度", "Focus level"))
+        appearanceControl.setImage(
+            NSImage(
+                systemSymbolName: "sun.max",
+                accessibilityDescription: language.text("亮色", "Light")
+            ),
+            forSegment: 0
+        )
+        appearanceControl.setImage(
+            NSImage(
+                systemSymbolName: "moon",
+                accessibilityDescription: language.text("暗色", "Dark")
+            ),
+            forSegment: 1
+        )
+        let keyVisibilityLabel = language.text("显示或隐藏 API Key", "Show or hide API key")
+        keyVisibilityButton.toolTip = keyVisibilityLabel
+        keyVisibilityButton.image = NSImage(
+            systemSymbolName: showsKey ? "eye.slash" : "eye",
+            accessibilityDescription: keyVisibilityLabel
+        )
+        let refreshLabel = language.text("拉取模型列表", "Refresh model list")
+        refreshModelsButton.toolTip = refreshLabel
+        refreshModelsButton.image = NSImage(
+            systemSymbolName: "arrow.clockwise",
+            accessibilityDescription: refreshLabel
+        )
+        let testLabel = language.text("测试模型", "Test model")
+        testModelButton.toolTip = testLabel
+        testModelButton.image = NSImage(
+            systemSymbolName: "bolt.horizontal.circle",
+            accessibilityDescription: testLabel
+        )
+        let saveModelLabel = language.text("保存模型配置", "Save model settings")
+        saveModelButton.toolTip = saveModelLabel
+        saveModelButton.image = NSImage(
+            systemSymbolName: "checkmark",
+            accessibilityDescription: saveModelLabel
+        )
+        copyPromptButton.title = language.text("复制", "Copy")
+        copyPromptButton.image = NSImage(
+            systemSymbolName: "doc.on.doc",
+            accessibilityDescription: copyPromptButton.title
+        )
+        editPromptButton.title = language.text("编辑", "Edit")
+        editPromptButton.image = NSImage(
+            systemSymbolName: "pencil",
+            accessibilityDescription: editPromptButton.title
+        )
+        selectAllPromptButton.title = language.text("全选", "Select all")
+        selectAllPromptButton.image = NSImage(
+            systemSymbolName: "selection.pin.in.out",
+            accessibilityDescription: selectAllPromptButton.title
+        )
+        cancelPromptButton.title = language.text("取消", "Cancel")
+        cancelPromptButton.image = NSImage(
+            systemSymbolName: "xmark",
+            accessibilityDescription: cancelPromptButton.title
+        )
+        savePromptButton.title = language.text("保存", "Save")
+        savePromptButton.image = NSImage(
+            systemSymbolName: "checkmark",
+            accessibilityDescription: savePromptButton.title
+        )
+        modelCombo.placeholderString = language.text("选择或输入模型名称", "Select or enter a model")
+        modelStatus.stringValue = ""
+        promptEditor.language = language
+        sizePopup.removeAllItems()
+        sizePopup.addItems(withTitles: sizeChoices.map { $0.1 })
+        if let index = sizeChoices.firstIndex(where: { $0.0 == readerSize }) {
+            sizePopup.selectItem(at: index)
+        }
+        updateKeyPlaceholder()
+        updatePromptStatus()
     }
 }
 
@@ -1333,6 +1516,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
     private var currentIsDark: Bool
     private var currentReaderSize: Int
     private var currentPrompt = ""
+    private var language: AppLanguage = .cn
 
     init(
         webView: WKWebView,
@@ -1649,6 +1833,22 @@ private final class ExpandedContainerView: NSVisualEffectView {
         currentPrompt = value
     }
 
+    func setLanguage(_ value: AppLanguage) {
+        language = value
+        settingsButton.toolTip = value.text("打开设置", "Open settings")
+        mark.toolTip = value.text("收起为图标", "Collapse to icon")
+        mark.setAccessibilityLabel(value.text("收起 Aperture", "Collapse Aperture"))
+        projectLabel.setAccessibilityLabel(value.text("当前工程", "Current project"))
+        monitoringSwitch.toolTip = value.text(
+            "监控所有 Codex 回答",
+            "Monitor all Codex responses"
+        )
+        monitoringSwitch.setAccessibilityLabel(value.text(
+            "监控 Codex 回答",
+            "Monitor Codex responses"
+        ))
+    }
+
     func setProjectName(_ value: String?) {
         let projectName = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         projectLabel.stringValue = projectName
@@ -1779,6 +1979,18 @@ private final class BubbleView: NSView {
         needsDisplay = true
     }
 
+    func setLanguage(_ value: AppLanguage) {
+        toolTip = value.text(
+            "Aperture · 点击展开，拖动可移动",
+            "Aperture · Click to expand, drag to move"
+        )
+        setAccessibilityLabel(value.text("展开 Aperture", "Expand Aperture"))
+        setAccessibilityHelp(value.text(
+            "点击展开注意力侧边栏，拖动可移动气泡",
+            "Click to expand the attention sidebar; drag to move the bubble"
+        ))
+    }
+
     func setTheme(isDark: Bool) {
         bubbleIsDark = isDark
         layer?.backgroundColor = (
@@ -1843,6 +2055,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private var readerSize = 18
     private var monitoringEnabled = true
     private var focusLevel = 0.62
+    private var language: AppLanguage = .cn
     private var customPrompt = ""
     private var focusWorkItem: DispatchWorkItem?
     private var resizeSaveWorkItem: DispatchWorkItem?
@@ -2023,6 +2236,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             focusLevel: focusLevel,
             isDark: isDark,
             readerSize: readerSize,
+            language: language,
             prompt: customPrompt,
             onFocusChanged: { [weak self] level in
                 self?.updateFocus(level: level)
@@ -2032,6 +2246,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             },
             onSizeChanged: { [weak self] value in
                 self?.setReaderSize(value)
+            },
+            onLanguageChanged: { [weak self] value in
+                self?.updateLanguage(value)
             },
             onPromptChanged: { [weak self] value in
                 self?.updatePrompt(value)
@@ -2137,6 +2354,17 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                         envelope.monitoring?.enabled ?? self.monitoringEnabled
                     self.focusLevel =
                         envelope.focus?.level ?? self.focusLevel
+                    let nextLanguage = envelope.language?.value ?? self.language
+                    if nextLanguage != self.language {
+                        self.language = nextLanguage
+                        NotificationCenter.default.post(
+                            name: languageChangedNotification,
+                            object: nextLanguage
+                        )
+                        self.expandedView.setLanguage(nextLanguage)
+                        self.bubbleView.setLanguage(nextLanguage)
+                        self.settingsController?.setLanguage(nextLanguage)
+                    }
                     self.customPrompt =
                         envelope.prompt?.value ?? self.customPrompt
                     self.expandedView.setMonitoring(
@@ -2400,6 +2628,47 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }.resume()
     }
 
+    private func updateLanguage(_ value: AppLanguage) {
+        language = value
+        NotificationCenter.default.post(
+            name: languageChangedNotification,
+            object: value
+        )
+        expandedView.setLanguage(value)
+        bubbleView.setLanguage(value)
+        settingsController?.setLanguage(value)
+        var request = URLRequest(url: languageURL)
+        request.httpMethod = "PATCH"
+        request.timeoutInterval = 3
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["value": value.rawValue]
+        )
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
+            guard let self else { return }
+            guard
+                let data,
+                (response as? HTTPURLResponse)?.statusCode == 200,
+                let envelope = try? JSONDecoder().decode(
+                    LanguageUpdateEnvelope.self,
+                    from: data
+                )
+            else {
+                DispatchQueue.main.async { self.refresh() }
+                return
+            }
+            DispatchQueue.main.async {
+                self.language = envelope.language.value
+                self.customPrompt = envelope.prompt.value
+                self.expandedView.setLanguage(self.language)
+                self.expandedView.setPrompt(self.customPrompt)
+                self.bubbleView.setLanguage(self.language)
+                self.settingsController?.setLanguage(self.language)
+                self.settingsController?.setPrompt(self.customPrompt)
+            }
+        }.resume()
+    }
+
     private func updatePrompt(_ value: String) {
         customPrompt = String(value.prefix(4000))
         expandedView.setPrompt(customPrompt)
@@ -2506,14 +2775,53 @@ private enum DaemonBootstrap {
     static func ensureRunning(completion: @escaping () -> Void) {
         var request = URLRequest(url: healthURL)
         request.timeoutInterval = 0.8
-        URLSession.shared.dataTask(with: request) { _, response, _ in
-            if (response as? HTTPURLResponse)?.statusCode == 200 {
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            let health = data.flatMap {
+                try? JSONDecoder().decode(HealthEnvelope.self, from: $0)
+            }
+            if (response as? HTTPURLResponse)?.statusCode == 200,
+               health?.ok == true,
+               health?.service == "aperture-attention",
+               health?.capabilities?.contains("language-v1") == true {
                 completion()
+                return
+            }
+            if health?.service == "aperture-attention" {
+                stopLegacyDaemon()
+                DispatchQueue.global(qos: .utility).asyncAfter(
+                    deadline: .now() + 0.4
+                ) {
+                    launch()
+                    completion()
+                }
                 return
             }
             launch()
             completion()
         }.resume()
+    }
+
+    private static func stopLegacyDaemon() {
+        let lookup = Process()
+        let output = Pipe()
+        lookup.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lookup.arguments = [
+            "-nP",
+            "-t",
+            "-iTCP:4317",
+            "-sTCP:LISTEN"
+        ]
+        lookup.standardOutput = output
+        lookup.standardError = FileHandle.nullDevice
+        guard (try? lookup.run()) != nil else { return }
+        lookup.waitUntilExit()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        let pids = String(data: data, encoding: .utf8)?
+            .split(whereSeparator: \.isNewline)
+            .compactMap { pid_t($0) } ?? []
+        for pid in pids where pid > 1 && pid != getpid() {
+            Darwin.kill(pid, SIGTERM)
+        }
     }
 
     private static func launch() {
@@ -2650,10 +2958,21 @@ private enum DaemonBootstrap {
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: AttentionPanelController?
     private var statusItem: NSStatusItem?
+    private var editMenu: NSMenu?
+    private var copyMenuItem: NSMenuItem?
+    private var toggleMenuItem: NSMenuItem?
+    private var refreshMenuItem: NSMenuItem?
+    private var quitMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureMainMenu()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(languageDidChange(_:)),
+            name: languageChangedNotification,
+            object: nil
+        )
         let controller = AttentionPanelController()
         self.controller = controller
         configureStatusItem()
@@ -2674,6 +2993,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
         NSApp.mainMenu = mainMenu
+        self.editMenu = editMenu
+        copyMenuItem = copyItem
     }
 
     private func configureStatusItem() {
@@ -2695,6 +3016,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         toggle.target = self
         menu.addItem(toggle)
+        toggleMenuItem = toggle
 
         let refresh = NSMenuItem(
             title: "刷新 Review",
@@ -2703,6 +3025,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         refresh.target = self
         menu.addItem(refresh)
+        refreshMenuItem = refresh
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
@@ -2712,9 +3035,19 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         quit.target = self
         menu.addItem(quit)
+        quitMenuItem = quit
 
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func languageDidChange(_ notification: Notification) {
+        guard let language = notification.object as? AppLanguage else { return }
+        editMenu?.title = language.text("编辑", "Edit")
+        copyMenuItem?.title = language.text("复制", "Copy")
+        toggleMenuItem?.title = language.text("展开 / 收起", "Expand / Collapse")
+        refreshMenuItem?.title = language.text("刷新 Review", "Refresh Review")
+        quitMenuItem?.title = language.text("退出 Aperture", "Quit Aperture")
     }
 
     @objc private func togglePanel() {

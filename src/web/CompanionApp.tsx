@@ -4,12 +4,13 @@ import {
   useRef,
   useState
 } from "react";
-import type { ReviewSnapshot } from "../core/types";
+import type { AppLanguage, ReviewSnapshot } from "../core/types";
 import { ApertureSceneView } from "./ApertureScene";
 import { AttentionDocumentView } from "./AttentionDocument";
 import { AttentionMarkdown } from "./AttentionMarkdown";
 import { getCurrentReview, getReviews } from "./api";
 import { mergeReviewHistory } from "./review-history";
+import { ui } from "./i18n";
 
 declare global {
   interface Window {
@@ -70,10 +71,10 @@ export function selectedReviewText(root: HTMLElement | null) {
   return selection.toString() || null;
 }
 
-export function reviewProjectName(review: ReviewSnapshot) {
+export function reviewProjectName(review: ReviewSnapshot, language: AppLanguage = "cn") {
   if (review.projectName?.trim()) return review.projectName.trim();
   const parts = review.projectPath?.split(/[\\/]/).filter(Boolean);
-  return parts?.at(-1) ?? "未知工程";
+  return parts?.at(-1) ?? ui(language).unknownProject;
 }
 
 function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
@@ -121,6 +122,7 @@ export function CompanionApp() {
   const [phase, setPhase] = useState<Phase>("waiting");
   const [monitoring, setMonitoringState] = useState(true);
   const [focusLevel, setFocusLevel] = useState(0.62);
+  const [language, setLanguage] = useState<AppLanguage>("cn");
   const [reviewHistory, setReviewHistory] = useState<ReviewSnapshot[]>([]);
   const [historyOffset, setHistoryOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -179,13 +181,14 @@ export function CompanionApp() {
 
   useEffect(() => {
     void Promise.all([getCurrentReview(), getReviews()])
-      .then(([{ review: current, monitoring: currentMonitoring, focus }, history]) => {
+      .then(([{ review: current, monitoring: currentMonitoring, focus, language: currentLanguage }, history]) => {
         const reviews = mergeReviewHistory(
           history.reviews,
           current ? [current] : []
         );
         setMonitoringState(currentMonitoring.enabled);
         setFocusLevel(focus.level);
+        setLanguage(currentLanguage.value);
         setReviewHistory(reviews);
         setHistoryOffset(0);
         setPhase(
@@ -227,6 +230,12 @@ export function CompanionApp() {
       };
       setFocusLevel(payload.level);
     });
+    stream.addEventListener("language", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data) as {
+        value: AppLanguage;
+      };
+      setLanguage(payload.value);
+    });
     stream.onerror = () => notifyNative(review, false);
 
     return () => {
@@ -247,6 +256,10 @@ export function CompanionApp() {
   useEffect(() => {
     notifyDisplayedReview(review);
   }, [review]);
+
+  useEffect(() => {
+    document.documentElement.lang = language === "en" ? "en" : "zh-CN";
+  }, [language]);
 
   useEffect(() => {
     const copySelection = (event: ClipboardEvent) => {
@@ -318,14 +331,14 @@ export function CompanionApp() {
       {!monitoring && (
         <section className="minimal-status">
           <MinimalSignal processing={false} />
-          <h1 lang="en">paused</h1>
+          <h1>{ui(language).paused}</h1>
         </section>
       )}
 
       {monitoring && phase === "waiting" && (
         <section className="minimal-status">
           <MinimalSignal processing={false} />
-          <h1 lang="en">wait</h1>
+          <h1>{ui(language).waiting}</h1>
         </section>
       )}
 
@@ -339,7 +352,7 @@ export function CompanionApp() {
         <>
           <article
             className="markdown-result"
-            aria-label="Aperture 处理结果"
+            aria-label={ui(language).reviewLabel}
             ref={reviewRef}
           >
             <section className="markdown-section markdown-answer">
@@ -347,11 +360,13 @@ export function CompanionApp() {
                 <ApertureSceneView
                   scene={review.attentionScene}
                   focusLevel={focusLevel}
+                  language={language}
                 />
               ) : review.attentionDocument ? (
                 <AttentionDocumentView
                   document={review.attentionDocument}
                   focusLevel={focusLevel}
+                  language={language}
                 />
               ) : (
                 <AttentionMarkdown source={review.resultMarkdown} />
@@ -359,13 +374,13 @@ export function CompanionApp() {
             </section>
           </article>
           <button
-            aria-label={copyState === "copied" ? "已复制" : "复制选中内容或全部内容"}
+            aria-label={copyState === "copied" ? ui(language).copied : ui(language).copyReview}
             className={`minimal-copy-button minimal-copy-button--${copyState}`}
             onMouseDown={() => {
               selectionAtCopyClick.current = selectedReviewText(reviewRef.current);
             }}
             onClick={() => void copyReview()}
-            title="复制选中内容或全部内容"
+            title={ui(language).copyReview}
             type="button"
           >
             {copyState === "copied" ? <Check size={14} /> : <Copy size={14} />}

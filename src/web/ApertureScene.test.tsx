@@ -154,4 +154,14 @@ describe("ApertureSceneView", () => {
     const brief = container.querySelector(".aperture-brief");
     expect(brief?.firstElementChild).toHaveClass("scene-gate--blocker");
   });
+
+  it("localizes scene chrome in English", () => {
+    render(
+      <ApertureSceneView scene={sampleScene} focusLevel={0.5} language="en" />
+    );
+
+    expect(screen.getByText("Decision needed")).toBeInTheDocument();
+    expect(screen.getByText("Comparison")).toBeInTheDocument();
+    expect(screen.queryByText("需要你决定")).toBeNull();
+  });
 });

@@ -16,6 +16,8 @@ export interface AgentEvent {
   parentEventId: string | null;
 }
 
+export type AppLanguage = "cn" | "en";
+
 export type AttentionLevel = "essential" | "supporting" | "detail";
 
 export type AttentionRole =
@@ -139,6 +141,7 @@ export interface ReviewSnapshot {
   projectName?: string;
   projectPath?: string;
   generatedAt: string;
+  language?: AppLanguage;
   sourceCompletedAt?: string;
   attentionScene?: AttentionScene;
   attentionDocument?: AttentionDocument;

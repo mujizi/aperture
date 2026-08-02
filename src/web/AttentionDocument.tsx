@@ -4,35 +4,33 @@ import {
   visibleAttentionBlocks
 } from "../core/attention-document";
 import type {
+  AppLanguage,
   AttentionBlock,
   AttentionDocument
 } from "../core/types";
 import { InlineMarkdown } from "./AttentionMarkdown";
+import { ui } from "./i18n";
 
-const roleLabels: Partial<Record<AttentionBlock["role"], string>> = {
-  decision: "需要你决定",
-  action: "下一步",
-  risk: "风险",
-  blocker: "阻塞",
-  reference: "参考"
-};
-
-const statusLabels: Partial<Record<AttentionBlock["status"], string>> = {
-  done: "已完成",
-  partial: "部分完成",
-  proposed: "方案",
-  unverified: "未验证"
-};
+function labels(language: AppLanguage) {
+  const value = ui(language);
+  return {
+    roles: { decision: value.decision, action: value.action, risk: value.risk, blocker: value.blocker, reference: value.reference },
+    statuses: { done: value.done, partial: value.partial, proposed: value.proposed, unverified: value.unverified }
+  };
+}
 
 function AttentionUnit({
   block,
-  lead
+  lead,
+  language
 }: {
   block: AttentionBlock;
   lead: boolean;
+  language: AppLanguage;
 }) {
-  const roleLabel = roleLabels[block.role];
-  const statusLabel = statusLabels[block.status];
+  const translated = labels(language);
+  const roleLabel = translated.roles[block.role as keyof typeof translated.roles];
+  const statusLabel = translated.statuses[block.status as keyof typeof translated.statuses];
   return (
     <section
       className={[
@@ -58,10 +56,12 @@ function AttentionUnit({
 
 export function AttentionDocumentView({
   document,
-  focusLevel
+  focusLevel,
+  language = "cn"
 }: {
   document: AttentionDocument;
   focusLevel: number;
+  language?: AppLanguage;
 }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded
@@ -79,6 +79,7 @@ export function AttentionDocumentView({
           block={block}
           key={`${index}:${block.role}:${block.content.slice(0, 24)}`}
           lead={index === leadIndex}
+          language={language}
         />
       ))}
       {hidden > 0 && (
@@ -87,7 +88,7 @@ export function AttentionDocumentView({
           onClick={() => setExpanded(true)}
           type="button"
         >
-          展开其余 {hidden} 条信息
+          {ui(language).showMore(hidden)}
         </button>
       )}
     </div>

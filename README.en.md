@@ -82,6 +82,7 @@ To start Aperture automatically after a restart, add it in **System Settings →
 | --- | --- |
 | Monitoring | Turn capture of completed Codex turns on or off at any time. Turns completed while it is off are not backfilled. |
 | Focus | Move left for more detail or right to emphasize the core. It changes visual weight only; it does not call the model again or hide genuine decisions or blockers. |
+| Language | Switch between `cn` (Chinese, the default) and `en` (English). UI copy, model prompts, and newly generated attention results use the selected language; custom prompts are stored separately for each language. |
 | Appearance | Switch between light and dark interfaces. |
 | Font size | Choose a reading size from Compact through Maximum for the floating window. |
 | Model configuration | Configure an OpenRouter API key and choose models from various upstream providers. You can favor inexpensive, fast models, refresh the catalog, test the connection, and save the configuration. |

@@ -59,6 +59,18 @@ describe("attention focus", () => {
     expect(result.projectPath).toBe("/Users/example/Aperture");
   });
 
+  it("localizes model failures and review metadata in English", async () => {
+    const result = await analyzeEvents([], {
+      timeoutMs: 10,
+      language: "en"
+    });
+
+    expect(result.language).toBe("en");
+    expect(result.resultMarkdown).toContain("Model request failed");
+    expect(result.resultMarkdown).toContain("API key is not configured");
+    expect(result.resultMarkdown).not.toContain("模型调用失败");
+  });
+
   it("sends unique questions and the complete final answer without tool events", async () => {
     const answer = `${"正文".repeat(1300)}结尾结论`;
     const events: AgentEvent[] = [

@@ -70,6 +70,7 @@ describe("OpenRouter attention scene output", () => {
     );
     expect(body.messages[0].content).toContain("聚焦度：62；目标：140 字");
     expect(body.messages[0].content).toContain("visual attention scene");
+    expect(body.messages[0].content).toContain("Simplified Chinese");
     expect(input).toEqual({
       question: "帮我判断回答里最重要的部分",
       answer,
@@ -77,6 +78,31 @@ describe("OpenRouter attention scene output", () => {
     });
     expect(input.answer).toContain("结尾的重要决定");
     expect(input.events).toBeUndefined();
+  });
+
+  it("requires English user-visible output when English is configured", async () => {
+    const scene = {
+      version: 2,
+      spotlight: { label: "Ready", text: "The result is ready.", status: "done", highlights: [] },
+      gate: { kind: "none", title: "", detail: "", options: [] },
+      views: []
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(scene) } }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await analyzeWithOpenRouter({
+      apiKey: "test-key-value",
+      model: "test/model",
+      timeoutMs: 1000,
+      language: "en",
+      customPrompt: "Keep the brief concise."
+    }, { question: "What changed?", answer: "The update is ready." });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.messages[0].content).toContain("Write every user-visible string in English");
+    expect(body.messages[0].content).toContain("Keep the brief concise.");
   });
 
   it("removes invalid highlights, duplicate views, and content from an empty gate", async () => {

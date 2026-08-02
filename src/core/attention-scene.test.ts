@@ -56,4 +56,32 @@ describe("attentionSceneToMarkdown", () => {
     expect(markdown).toContain("| 对比项 | 上一版 | 当前版 |");
     expect(markdown).not.toContain("参考：");
   });
+
+  it("uses English structural labels for English reviews", () => {
+    const scene: AttentionScene = {
+      version: 2,
+      spotlight: { label: "Result", text: "The update is ready.", status: "done", highlights: [] },
+      gate: {
+        kind: "decision",
+        title: "Choose a release channel",
+        detail: "This controls rollout speed.",
+        options: ["Stable", "Preview"]
+      },
+      views: [{
+        kind: "comparison",
+        label: "Release options",
+        attention: "supporting",
+        status: "proposed",
+        tone: "change",
+        leftLabel: "Stable",
+        rightLabel: "Preview",
+        rows: [{ aspect: "Speed", left: "Slower", right: "Faster", change: "different" }]
+      }]
+    };
+
+    const markdown = attentionSceneToMarkdown(scene, "en");
+    expect(markdown).toContain("Decision needed: Choose a release channel");
+    expect(markdown).toContain("| Comparison | Stable | Preview |");
+    expect(markdown).not.toContain("需要你决定");
+  });
 });

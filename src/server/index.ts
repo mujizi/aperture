@@ -16,7 +16,7 @@ import {
   markInboxSeen,
   registerCompletedTurn
 } from "./unread-inbox.js";
-import type { AgentEvent, ReviewSnapshot } from "../core/types.js";
+import type { AgentEvent, AppLanguage, ReviewSnapshot } from "../core/types.js";
 
 const port = Number(process.env.APERTURE_PORT ?? 4317);
 const globalConfigDir = path.join(os.homedir(), ".aperture");
@@ -241,10 +241,52 @@ const DEFAULT_ATTENTION_PROMPT = PREVIOUS_CONTINUOUS_ATTENTION_PROMPT.replace(
   "highlights 只标记原句中最值得扫读的 1–3 个完整短语，并保持原文完全一致：关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要用颜色装饰普通词，也不要依赖加粗表达全部层次。",
   "highlights 是稀缺的编辑标注，只选择原句中真正影响扫读的完整短语并保持原文完全一致：spotlight 使用 0–2 个，每个 statement 使用 0–1 个，整个场景不超过 4 个。关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要标记普通名词、泛泛的完成表述或已经由 gate、flow、comparison、metrics 结构清楚表达的信息；主要层次来自顺序、语义角色和 attention，而不是划词数量。"
 );
+const DEFAULT_EN_ATTENTION_PROMPT = `You are Aperture. Turn the agent's final answer into a continuous attention brief that a user can read without opening additional views. Lead with the most important result, then include only relationships and context that materially help understanding or action.
+
+Use the current question only to identify what the user cares about. Do not repeat or answer the question. All facts must come from the final answer. Remove greetings, process narration, repetition, tool noise, and meta commentary that adds no information.
+
+Choose exactly one spotlight first. It must be self-contained, accurate, and free of context-dependent phrases such as "this version" or "above." Its status must reflect actual delivery: done only for work explicitly completed, partial for incomplete work, proposed for plans or recommendations, unverified when important validation is missing, and none when delivery status does not apply.
+
+Then determine the gate:
+- Use decision only when the answer leaves a real choice, confirmation, or intervention that changes what happens next.
+- Use blocker only when the goal cannot currently continue, the result is unusable, or continuing would cause a clear error.
+- Otherwise use none. Ordinary suggestions and optional improvements are not gates. A real gate must never be hidden because of focus or length.
+
+Choose the most appropriate visual form for remaining information. Do not force a visualization:
+- statement: one independent conclusion, reason, risk, or action;
+- flow: a real sequence, cause-and-effect relationship, processing chain, or before/after path;
+- comparison: two versions, options, or states that share comparison dimensions;
+- metrics: numbers that directly establish a result, scale, or validation state.
+
+Express each relationship once. Do not repeat the gate or spotlight in a view. Use 1-4 views in most cases, and omit weak views. Labels must be short, specific, factual statements, not generic container names such as "Key point," "Process," "Comparison," "Validation," or "More." supporting means information needed for understanding or action; context means lower-priority background still worth retaining. Use change, risk, or verified tones only when their meaning truly applies; otherwise use neutral.
+
+Highlights are scarce editorial marks. They must exactly match phrases in the text. Use 0-2 in the spotlight, 0-1 in each statement, and no more than 4 in the entire scene. Use key for a genuinely central object, change for a meaningful change, decision for a user choice, risk for a real risk, and verified for an explicitly verified fact. Do not highlight ordinary nouns or generic completion language.
+
+The current focus level is {{focus}} / 100. It changes visual emphasis only; do not delete supporting or context data because of it. Produce a stable, non-repetitive scene. Never add facts absent from the final answer.`;
+const DEFAULT_ATTENTION_PROMPTS: Record<AppLanguage, string> = {
+  cn: DEFAULT_ATTENTION_PROMPT,
+  en: DEFAULT_EN_ATTENTION_PROMPT
+};
+const OLD_DEFAULT_PROMPTS = new Set([
+  LEGACY_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_DEFAULT_WITH_CODEX_PROMPT,
+  LAYERED_DEFAULT_ATTENTION_PROMPT_V1,
+  LAYERED_DEFAULT_ATTENTION_PROMPT_V2,
+  PREVIOUS_LAYERED_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_MARKDOWN_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_SEMANTIC_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_TIGHTENED_SEMANTIC_DEFAULT_ATTENTION_PROMPT,
+  PREVIOUS_ATTENTION_SCENE_DEFAULT_PROMPT,
+  PREVIOUS_CONTINUOUS_ATTENTION_PROMPT,
+  PREVIOUS_DENSITY_ATTENTION_PROMPT,
+  PREVIOUS_STRICT_ATTENTION_PROMPT
+]);
 let monitoringEnabled = true;
 let monitoringAcceptAfter = 0;
 let focusLevel = 0.62;
-let customPrompt = DEFAULT_ATTENTION_PROMPT;
+let language: AppLanguage = "cn";
+let customPrompts: Record<AppLanguage, string> = { ...DEFAULT_ATTENTION_PROMPTS };
 let unreadTurnKeys = new Set<string>();
 let countedTurnKeys = new Set<string>();
 let hasStoredInboxState = false;
@@ -253,34 +295,33 @@ try {
     monitoringEnabled?: boolean;
     monitoringAcceptAfter?: number;
     focusLevel?: number;
+    language?: AppLanguage;
     customPrompt?: string;
+    customPrompts?: Partial<Record<AppLanguage, string>>;
     unreadTurnKeys?: string[];
     countedTurnKeys?: string[];
   };
   monitoringEnabled = saved.monitoringEnabled ?? true;
   monitoringAcceptAfter = Number(saved.monitoringAcceptAfter ?? 0);
   focusLevel = Math.min(1, Math.max(0, Number(saved.focusLevel ?? 0.62)));
+  language = saved.language === "en" ? "en" : "cn";
   const savedPrompt =
     typeof saved.customPrompt === "string"
       ? saved.customPrompt.trim().slice(0, 4000)
       : "";
-  customPrompt =
-    savedPrompt &&
-    savedPrompt !== LEGACY_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_DEFAULT_WITH_CODEX_PROMPT &&
-    savedPrompt !== LAYERED_DEFAULT_ATTENTION_PROMPT_V1 &&
-    savedPrompt !== LAYERED_DEFAULT_ATTENTION_PROMPT_V2 &&
-    savedPrompt !== PREVIOUS_LAYERED_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_MARKDOWN_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_SEMANTIC_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_TIGHTENED_SEMANTIC_DEFAULT_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_ATTENTION_SCENE_DEFAULT_PROMPT &&
-    savedPrompt !== PREVIOUS_CONTINUOUS_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_DENSITY_ATTENTION_PROMPT &&
-    savedPrompt !== PREVIOUS_STRICT_ATTENTION_PROMPT
-      ? savedPrompt
-      : DEFAULT_ATTENTION_PROMPT;
+  const savedPrompts = saved.customPrompts ?? {};
+  const savedCnPrompt = typeof savedPrompts.cn === "string"
+    ? savedPrompts.cn.trim().slice(0, 4000)
+    : savedPrompt;
+  const savedEnPrompt = typeof savedPrompts.en === "string"
+    ? savedPrompts.en.trim().slice(0, 4000)
+    : "";
+  customPrompts = {
+    cn: savedCnPrompt && !OLD_DEFAULT_PROMPTS.has(savedCnPrompt)
+      ? savedCnPrompt
+      : DEFAULT_ATTENTION_PROMPT,
+    en: savedEnPrompt || DEFAULT_EN_ATTENTION_PROMPT
+  };
   if (Array.isArray(saved.unreadTurnKeys)) {
     unreadTurnKeys = new Set(saved.unreadTurnKeys.filter(
       (value): value is string => typeof value === "string"
@@ -294,6 +335,10 @@ try {
   }
 } catch (error) {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(error);
+}
+
+function currentPrompt() {
+  return customPrompts[language];
 }
 
 function reviewTurnKey(runId: string, turnId: string | null) {
@@ -317,7 +362,8 @@ async function saveMonitoringSettings() {
         monitoringEnabled,
         monitoringAcceptAfter,
         focusLevel,
-        customPrompt,
+        language,
+        customPrompts,
         unreadTurnKeys: [...unreadTurnKeys],
         countedTurnKeys: [...countedTurnKeys]
       },
@@ -360,8 +406,11 @@ function config() {
     focus: {
       level: focusLevel
     },
+    language: {
+      value: language
+    },
     prompt: {
-      value: customPrompt
+      value: currentPrompt()
     },
     inbox: {
       unreadCount: unreadTurnKeys.size
@@ -404,7 +453,8 @@ async function runAnalysis(runId: string, turnId: string | null) {
       apiKey: runtimeOpenRouter.apiKey,
       model: runtimeOpenRouter.model,
       focusLevel,
-      customPrompt,
+      customPrompt: currentPrompt(),
+      language,
       timeoutMs: Number(process.env.APERTURE_OPENROUTER_TIMEOUT_MS ?? 45000)
     });
     const storedReview = await store.appendReview(review);
@@ -436,7 +486,12 @@ async function runAnalysis(runId: string, turnId: string | null) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "aperture-attention", version: "0.2.0" });
+  res.json({
+    ok: true,
+    service: "aperture-attention",
+    version: "0.2.1",
+    capabilities: ["language-v1"]
+  });
 });
 
 app.get("/api/config", (_req, res) => {
@@ -655,6 +710,39 @@ app.patch("/api/focus", async (req, res, next) => {
   }
 });
 
+function scheduleLatestReanalysis() {
+  if (focusReanalysisTimer) clearTimeout(focusReanalysisTimer);
+  if (!monitoringEnabled) return;
+  focusReanalysisTimer = setTimeout(() => {
+    focusReanalysisTimer = null;
+    void store
+      .latestReview()
+      .then((review) => review ? runAnalysis(review.runId, review.turnId) : null)
+      .catch((error) => console.warn(error));
+  }, 200);
+  focusReanalysisTimer.unref();
+}
+
+app.patch("/api/language", async (req, res, next) => {
+  try {
+    const requested = req.body?.value;
+    if (requested !== "cn" && requested !== "en") {
+      res.status(400).json({ error: "language must be cn or en" });
+      return;
+    }
+    language = requested;
+    await saveMonitoringSettings();
+    const languageSetting = { value: language };
+    const prompt = { value: currentPrompt() };
+    pushEvent("language", languageSetting);
+    pushEvent("prompt", { configured: true });
+    scheduleLatestReanalysis();
+    res.json({ language: languageSetting, prompt });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.patch("/api/prompt", async (req, res, next) => {
   try {
     if (typeof req.body?.value !== "string") {
@@ -666,24 +754,11 @@ app.patch("/api/prompt", async (req, res, next) => {
       res.status(400).json({ error: "prompt must be 4000 characters or fewer" });
       return;
     }
-    customPrompt = requested || DEFAULT_ATTENTION_PROMPT;
+    customPrompts[language] = requested || DEFAULT_ATTENTION_PROMPTS[language];
     await saveMonitoringSettings();
-    const prompt = { value: customPrompt };
-    pushEvent("prompt", { configured: customPrompt.length > 0 });
-
-    if (focusReanalysisTimer) clearTimeout(focusReanalysisTimer);
-    if (monitoringEnabled) {
-      focusReanalysisTimer = setTimeout(() => {
-        focusReanalysisTimer = null;
-        void store
-          .latestReview()
-          .then((review) =>
-            review ? runAnalysis(review.runId, review.turnId) : null
-          )
-          .catch((error) => console.warn(error));
-      }, 200);
-      focusReanalysisTimer.unref();
-    }
+    const prompt = { value: currentPrompt() };
+    pushEvent("prompt", { configured: true });
+    scheduleLatestReanalysis();
     res.json({ prompt });
   } catch (error) {
     next(error);
@@ -732,7 +807,8 @@ app.get("/api/review/current", async (req, res, next) => {
       review: await store.latestReview(req.query.runId?.toString()),
       monitoring: { enabled: monitoringEnabled },
       focus: { level: focusLevel },
-      prompt: { value: customPrompt },
+      language: { value: language },
+      prompt: { value: currentPrompt() },
       inbox: { unreadCount: unreadTurnKeys.size }
     });
   } catch (error) {

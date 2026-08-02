@@ -59,4 +59,18 @@ describe("AttentionDocumentView", () => {
     expect(globalThis.document.querySelectorAll("[data-attention]")).toHaveLength(4);
     expect(screen.queryByRole("button", { name: /展开其余/ })).toBeNull();
   });
+
+  it("localizes semantic labels and expansion controls in English", () => {
+    render(
+      <AttentionDocumentView
+        document={sampleDocument}
+        focusLevel={0.9}
+        language="en"
+      />
+    );
+
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getByText("Decision needed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show 2 more items" })).toBeInTheDocument();
+  });
 });

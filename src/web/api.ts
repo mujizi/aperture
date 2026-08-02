@@ -1,4 +1,4 @@
-import type { ReviewSnapshot } from "../core/types";
+import type { AppLanguage, ReviewSnapshot } from "../core/types";
 
 async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
@@ -12,6 +12,7 @@ export async function getCurrentReview() {
     review: ReviewSnapshot | null;
     monitoring: { enabled: boolean };
     focus: { level: number };
+    language: { value: AppLanguage };
   }>("/api/review/current");
 }
 
@@ -24,6 +25,7 @@ export async function getConfig() {
     openRouter: { enabled: boolean; model: string | null };
     monitoring: { enabled: boolean };
     focus: { level: number };
+    language: { value: AppLanguage };
     port: number;
     dataDir: string;
   }>("/api/config");
