@@ -14,6 +14,7 @@ private let modelsURL = URL(string: "http://127.0.0.1:4317/api/models")!
 private let modelTestURL = URL(string: "http://127.0.0.1:4317/api/config/test")!
 private let inboxSeenURL = URL(string: "http://127.0.0.1:4317/api/inbox/seen")!
 private let healthURL = URL(string: "http://127.0.0.1:4317/api/health")!
+private let defaultExpandedSize = NSSize(width: 343, height: 726)
 
 private struct ReviewEnvelope: Decodable {
     let review: ReviewSummary?
@@ -267,6 +268,8 @@ private final class ApertureMarkView: NSView {
     override var intrinsicContentSize: NSSize {
         NSSize(width: 29, height: 29)
     }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
         actionHandler?()
@@ -1801,6 +1804,8 @@ private final class BubbleView: NSView {
         didDrag = false
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func mouseDragged(with event: NSEvent) {
         guard
             let down = mouseDownLocation,
@@ -1845,13 +1850,14 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private var isExpanded = true
     private var hasBaseline = false
     private var latestReviewID: String?
+    private var displayedReviewID: String?
     private var state = AttentionState(
         reviewID: nil,
         unreadCount: 0,
         connected: false
     )
     private var lastWebLoad = Date.distantPast
-    private var expandedSize = NSSize(width: 430, height: 800)
+    private var expandedSize = defaultExpandedSize
     private var settingsPanel: FloatingPanel?
     private var settingsController: SettingsViewController?
     private var isPositioningSettings = false
@@ -1901,7 +1907,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
         bubbleView = BubbleView(frame: NSRect(x: 0, y: 0, width: 64, height: 64))
         panel = FloatingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 430, height: 800),
+            contentRect: NSRect(origin: .zero, size: defaultExpandedSize),
             styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
@@ -2139,9 +2145,12 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     )
                     self.expandedView.setFocus(level: self.focusLevel)
                     self.expandedView.setPrompt(self.customPrompt)
-                    self.expandedView.setProjectName(
-                        envelope.review?.projectName
-                    )
+                    if self.displayedReviewID == nil ||
+                       self.displayedReviewID == envelope.review?.id {
+                        self.expandedView.setProjectName(
+                            envelope.review?.projectName
+                        )
+                    }
                     self.settingsController?.setFocus(level: self.focusLevel)
                     self.settingsController?.setPrompt(self.customPrompt)
                     self.bubbleView.setFocus(level: self.focusLevel)
@@ -2460,10 +2469,18 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             pasteboard.setString(text, forType: .string)
             return
         }
+        if type == "displayedReview" {
+            displayedReviewID = body["reviewId"] as? String
+            expandedView.setProjectName(body["projectName"] as? String)
+            return
+        }
         guard type == "review" else { return }
-        expandedView.setProjectName(body["projectName"] as? String)
+        let reviewID = body["reviewId"] as? String
+        if displayedReviewID == nil || displayedReviewID == reviewID {
+            expandedView.setProjectName(body["projectName"] as? String)
+        }
         let next = AttentionState(
-            reviewID: body["reviewId"] as? String,
+            reviewID: reviewID,
             unreadCount: state.unreadCount,
             connected: body["connected"] as? Bool ?? true
         )

@@ -86,6 +86,20 @@ function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
   });
 }
 
+export function displayedReviewMessage(review: ReviewSnapshot | null) {
+  return {
+    type: "displayedReview",
+    reviewId: review?.id ?? null,
+    projectName: review ? reviewProjectName(review) : null
+  };
+}
+
+function notifyDisplayedReview(review: ReviewSnapshot | null) {
+  window.webkit?.messageHandlers?.aperture?.postMessage(
+    displayedReviewMessage(review)
+  );
+}
+
 function MinimalSignal({ processing }: { processing: boolean }) {
   return (
     <div className={processing ? "minimal-signal is-processing" : "minimal-signal"}>
@@ -229,6 +243,10 @@ export function CompanionApp() {
     selectionAtCopyClick.current = null;
     if (copyTimer.current) clearTimeout(copyTimer.current);
   }, [review?.id]);
+
+  useEffect(() => {
+    notifyDisplayedReview(review);
+  }, [review]);
 
   useEffect(() => {
     const copySelection = (event: ClipboardEvent) => {

@@ -2,7 +2,11 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import type { ReviewSnapshot } from "../core/types";
-import { reviewProjectName, selectedReviewText } from "./CompanionApp";
+import {
+  displayedReviewMessage,
+  reviewProjectName,
+  selectedReviewText
+} from "./CompanionApp";
 
 afterEach(() => {
   window.getSelection()?.removeAllRanges();
@@ -62,5 +66,19 @@ describe("reviewProjectName", () => {
     expect(
       reviewProjectName({ ...review, projectPath: "/Users/example/OtherProject" })
     ).toBe("OtherProject");
+  });
+
+  it("identifies the history page currently shown by the companion", () => {
+    expect(
+      displayedReviewMessage({
+        ...review,
+        id: "older-review",
+        projectName: "Aperture"
+      })
+    ).toEqual({
+      type: "displayedReview",
+      reviewId: "older-review",
+      projectName: "Aperture"
+    });
   });
 });
