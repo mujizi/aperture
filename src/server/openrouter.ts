@@ -399,6 +399,15 @@ export function attentionCharacterBudget(focusLevel: number) {
   return 90;
 }
 
+export function attentionCompressionTargets(focusLevel: number) {
+  const focus = Math.min(1, Math.max(0, focusLevel));
+  return {
+    compressionPercent: Math.round(focus * 100),
+    retentionPercent: Math.round((1 - focus) * 100),
+    targetCharacters: attentionCharacterBudget(focus)
+  };
+}
+
 function renderAttentionPrompt(
   template: string,
   focusLevel: number,
@@ -406,6 +415,8 @@ function renderAttentionPrompt(
 ) {
   return template
     .replaceAll("{{focus}}", String(Math.round(focusLevel * 100)))
+    .replaceAll("{{compressionPercent}}", String(Math.round(focusLevel * 100)))
+    .replaceAll("{{retentionPercent}}", String(Math.round((1 - focusLevel) * 100)))
     .replaceAll("{{targetCharacters}}", String(targetCharacters));
 }
 
@@ -417,7 +428,11 @@ async function requestAttentionScene(
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
     const focusLevel = Math.min(1, Math.max(0, config.focusLevel ?? 0.62));
-    const targetCharacters = attentionCharacterBudget(focusLevel);
+    const {
+      compressionPercent,
+      retentionPercent,
+      targetCharacters
+    } = attentionCompressionTargets(focusLevel);
     const customPrompt = config.customPrompt?.trim().slice(0, 4000);
     const outputLanguage = config.language === "en" ? "English" : "Simplified Chinese";
     const basePrompt = SYSTEM_PROMPT.replace("{{language}}", outputLanguage);
@@ -445,7 +460,10 @@ async function requestAttentionScene(
             content: JSON.stringify({
               question: input.question,
               answer: input.answer,
-              focus: Math.round(focusLevel * 100)
+              focus: Math.round(focusLevel * 100),
+              compressionPercent,
+              retentionPercent,
+              targetCharacters
             })
           }
         ],

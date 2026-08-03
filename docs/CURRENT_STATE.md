@@ -73,7 +73,7 @@ decision（仅真实选择存在时，位于结果后）
 
 ### 3.3 伴侣窗口交互
 
-- macOS `NSPanel` 悬浮显示，不占 Dock；可以收起为气泡。
+- macOS `NSPanel` 悬浮显示，不占 Dock；可以收起为无外框的透明金色像素猫咪图标。
 - Session Watcher 发现新一轮完成后，界面先进入处理动画，结果到达后实时更新。
 - 顶栏用独立字体显示当前工程名，开关控制监控；设置中控制模型、密钥、提示词、聚焦度与主题。
 - 页面文字可以选择；复制按钮优先复制选区，没有选区时复制派生 Markdown。
@@ -167,7 +167,7 @@ flowchart TD
 | Markdown 兼容 | `src/core/attention-scene.ts` | 从场景派生可复制 Markdown |
 | 当前场景渲染 | `src/web/ApertureScene.tsx` | spotlight、gate、四类关系视图 |
 | 页面状态 | `src/web/CompanionApp.tsx` | SSE、历史、复制、等待/处理中/完成状态 |
-| 原生外壳 | `native/ApertureCompanion/` | NSPanel、气泡、菜单栏、WebView 与原生桥接 |
+| 原生外壳 | `native/ApertureCompanion/` | NSPanel、透明猫咪图标、菜单栏、WebView 与原生桥接 |
 
 ### 5.2 `AttentionScene v2` 协议
 
@@ -211,7 +211,7 @@ interface AttentionScene {
 - 根据真实关系自由选择 statement、flow、comparison、metrics；
 - 不为可视化而可视化，views 通常 1–4 个，宁缺毋滥；
 - gate、spotlight 和 views 不重复表达同一信息；
-- 聚焦度只改变视觉权重，不删除已选内容；
+- 聚焦度映射为提示词压缩率，调整后重新分析当前结果；界面完整显示模型最终选中的内容；
 - 不添加事实，不把建议写成已实施，不把未验证写成已验证。
 
 ### 为什么当前没有单独意图识别调用

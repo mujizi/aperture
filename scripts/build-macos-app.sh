@@ -27,6 +27,8 @@ swiftc \
   -o "$contents_dir/MacOS/Aperture"
 
 cp native/ApertureCompanion/Info.plist "$contents_dir/Info.plist"
+cp native/ApertureCompanion/ApertureCatSprite.png \
+  "$resources_dir/ApertureCatSprite.png"
 cp plugins/aperture-attention/runtime/server.mjs "$resources_dir/runtime/server.mjs"
 ditto dist/web "$resources_dir/runtime/web"
 

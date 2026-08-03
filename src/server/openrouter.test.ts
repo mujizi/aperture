@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { analyzeWithOpenRouter } from "./openrouter";
+import {
+  analyzeWithOpenRouter,
+  attentionCompressionTargets
+} from "./openrouter";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -55,7 +58,7 @@ describe("OpenRouter attention scene output", () => {
         model: "test/model",
         timeoutMs: 1000,
         focusLevel: 0.62,
-        customPrompt: "聚焦度：{{focus}}；目标：{{targetCharacters}} 字"
+        customPrompt: "聚焦度：{{focus}}；压缩 {{compressionPercent}}%；保留 {{retentionPercent}}%；目标：{{targetCharacters}} 字"
       },
       { question: "帮我判断回答里最重要的部分", answer }
     );
@@ -68,16 +71,39 @@ describe("OpenRouter attention scene output", () => {
     expect(body.response_format.json_schema.name).toBe(
       "aperture_attention_scene"
     );
-    expect(body.messages[0].content).toContain("聚焦度：62；目标：140 字");
+    expect(body.messages[0].content).toContain(
+      "聚焦度：62；压缩 62%；保留 38%；目标：140 字"
+    );
     expect(body.messages[0].content).toContain("visual attention scene");
     expect(body.messages[0].content).toContain("Simplified Chinese");
     expect(input).toEqual({
       question: "帮我判断回答里最重要的部分",
       answer,
-      focus: 62
+      focus: 62,
+      compressionPercent: 62,
+      retentionPercent: 38,
+      targetCharacters: 140
     });
     expect(input.answer).toContain("结尾的重要决定");
     expect(input.events).toBeUndefined();
+  });
+
+  it("maps focus directly to prompt compression and retention targets", () => {
+    expect(attentionCompressionTargets(0)).toEqual({
+      compressionPercent: 0,
+      retentionPercent: 100,
+      targetCharacters: 500
+    });
+    expect(attentionCompressionTargets(0.62)).toEqual({
+      compressionPercent: 62,
+      retentionPercent: 38,
+      targetCharacters: 140
+    });
+    expect(attentionCompressionTargets(1)).toEqual({
+      compressionPercent: 100,
+      retentionPercent: 0,
+      targetCharacters: 90
+    });
   });
 
   it("requires English user-visible output when English is configured", async () => {

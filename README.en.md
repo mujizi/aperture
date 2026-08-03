@@ -30,11 +30,11 @@ Aperture watches local Codex tasks in the background. When a turn completes, it 
     <td width="50%" align="center"><strong>Expanded</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/images/aperture-collapsed.png" width="100%" alt="Aperture collapsed into a draggable bubble at the edge of the desktop"></td>
-    <td><img src="docs/images/aperture-expanded.jpg" width="100%" alt="Aperture expanded into a floating reading panel beside Codex"></td>
+    <td><img src="docs/images/aperture-collapsed.png" width="100%" alt="Aperture collapsed into a transparent golden pixel-cat icon at the edge of the desktop"></td>
+    <td><img src="docs/images/aperture-expanded.jpg" width="100%" alt="Aperture expanded into a floating reading panel with the cat thumbnail in its header"></td>
   </tr>
   <tr>
-    <td valign="top">Collapse the companion into a draggable bubble after reading. The entry point remains available without occupying the workspace.</td>
+    <td valign="top">Collapse the companion into a frameless transparent golden pixel-cat icon. When a new result arrives, the cat briefly focuses its aperture lens and blinks once.</td>
     <td valign="top">Click the bubble to restore the floating window and read beside the current task without switching to a second workspace.</td>
   </tr>
 </table>
@@ -42,7 +42,7 @@ Aperture watches local Codex tasks in the background. When a turn completes, it 
 ### Automatic attention pass: reorder reading priority instead of truncating text
 
 <p align="center">
-  <img src="docs/images/aperture-attention-ui.png" width="420" alt="Aperture attention scene showing a primary result, relationships, steps, and verification evidence">
+  <img src="docs/images/aperture-attention-ui.png" width="420" alt="Aperture attention scene with the cat thumbnail in its header, showing a primary result, relationships, steps, and verification evidence">
 </p>
 
 The interface follows human reading priority from top to bottom:
@@ -53,9 +53,9 @@ The interface follows human reading priority from top to bottom:
 | **Decision / blocker** | Is there a real choice that needs the user, or a problem that makes the result unusable? These stay pinned only when they genuinely exist. |
 | **Relationship view** | Are the facts connected as steps, causes, comparisons, or metrics? Aperture chooses the matching `flow`, `comparison`, or `metrics` view. |
 | **Verification and evidence** | Which tests, builds, or facts support the result? Routine verification is compressed into high-value evidence. |
-| **Context** | What still matters without deserving the first glance? Higher focus reduces its visual weight. |
+| **Context** | What still matters without deserving the first glance? Higher focus makes the model discard more low-value context. |
 
-New results appear automatically and are stored locally in actual completion order. Use the arrow keys to browse older or newer tasks. Focus changes visual hierarchy only—it does not call the model again or delete selected decisions, blockers, or facts.
+New results appear automatically and are stored locally in actual completion order. Use the arrow keys to browse older or newer tasks. Focus maps directly to a target prompt compression percentage and reanalyzes the current result; genuine decisions, blockers, major risks, and action-critical information always survive.
 
 ### Settings: control capture, reading, and the attention model
 
@@ -64,7 +64,7 @@ New results appear automatically and are stored locally in actual completion ord
 </p>
 
 - **Capture:** enable or disable monitoring and switch between Chinese and English. Turns completed while monitoring is off are not backfilled.
-- **Reading:** adjust focus, light or dark appearance, and font size. These change presentation without rewriting history.
+- **Reading:** adjust focus, light or dark appearance, and font size. Focus re-distills the current result; appearance and type size change presentation only.
 - **Attention model:** configure the OpenRouter API key, model, and custom prompt. After a successful connection test, changes affect future attention scenes only.
 
 ## Quick start
@@ -123,8 +123,8 @@ Continue working in Codex as usual. After each completed turn:
 
 - Aperture enters its processing state and presents the new attention scene;
 - use the left and right arrow keys to move through older or newer results;
-- adjust focus to change the visual weight of the result, supporting details, and context;
-- collapse the panel into a draggable bubble and click it to expand again;
+- adjust focus to re-distill the current result at a target compression percentage;
+- collapse the panel into a draggable transparent golden pixel-cat icon and click it to expand again;
 - copy selected text or the full derived Markdown.
 
 To start Aperture automatically after a restart, add it in **System Settings → General → Login Items**.
@@ -134,7 +134,7 @@ To start Aperture automatically after a restart, add it in **System Settings →
 | Setting | What it does |
 | --- | --- |
 | Monitoring | Turn capture of completed Codex turns on or off at any time. Turns completed while it is off are not backfilled. |
-| Focus | Move left for more detail or right to emphasize the core. It changes visual weight only; it does not call the model again or hide genuine decisions or blockers. |
+| Focus | Move left for more detail or right for a higher target information-compression rate. A change re-runs the attention model on the current result without compressing away genuine decisions, blockers, major risks, or action-critical information. |
 | Language | Switch between `cn` (Chinese, the default) and `en` (English). UI copy, model prompts, and newly generated attention results use the selected language; custom prompts are stored separately for each language. |
 | Appearance | Switch between light and dark interfaces. |
 | Font size | Choose a reading size from Compact through Maximum for the floating window. |
@@ -278,9 +278,9 @@ Flows are used only for real flows, comparisons only for shared dimensions, and 
 
 If the model is missing, times out, fails, or returns invalid content, Aperture shows an explicit error. It does not disguise failure with rule-based compression or the untouched original answer.
 
-### 5. Focus does not delete facts
+### 5. Focus controls prompt compression
 
-Focus changes visual weight without calling the model again or hiding genuine decisions and blockers. Users can lower background noise while retaining the information already selected.
+Focus maps directly to a target information-compression percentage and reanalyzes the current result. The model removes low-value context, implementation detail, and repetitive evidence first; genuine decisions, blockers, major risks, and action-critical information are exempt.
 
 ### 6. Local-first without pretending to be fully offline
 

@@ -13,7 +13,7 @@ import { handleMcpRequest } from "./mcp.js";
 import { CodexSessionWatcher } from "./session-watcher.js";
 import { EventStore } from "./store.js";
 import {
-  markInboxSeen,
+  markInboxItemSeen,
   registerCompletedTurn
 } from "./unread-inbox.js";
 import type { AgentEvent, AppLanguage, ReviewSnapshot } from "../core/types.js";
@@ -237,11 +237,17 @@ highlights 仅用于给少量关键短语增加轻微字重，不会用彩色背
 const PREVIOUS_STRICT_ATTENTION_PROMPT = `${PREVIOUS_DENSITY_ATTENTION_PROMPT}
 
 严格按关系选视图：只有各步骤必须按顺序阅读，或存在明确因果、输入输出关系时才使用 flow；一组并列功能、改动或特性不是流程。回答明确描述旧版与新版、两个方案或两个状态，并能沿共同维度比较时，优先使用 comparison。输出前逐条检查 views：如果某条只是复述 spotlight 或 gate，删除它，不要靠改写句子保留重复内容。`;
-const DEFAULT_ATTENTION_PROMPT = PREVIOUS_CONTINUOUS_ATTENTION_PROMPT.replace(
+const PREVIOUS_HIGHLIGHT_ATTENTION_PROMPT = PREVIOUS_CONTINUOUS_ATTENTION_PROMPT.replace(
   "highlights 只标记原句中最值得扫读的 1–3 个完整短语，并保持原文完全一致：关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要用颜色装饰普通词，也不要依赖加粗表达全部层次。",
   "highlights 是稀缺的编辑标注，只选择原句中真正影响扫读的完整短语并保持原文完全一致：spotlight 使用 0–2 个，每个 statement 使用 0–1 个，整个场景不超过 4 个。关键对象用 key，变化用 change，用户选择用 decision，风险用 risk，已验证事实用 verified。不要标记普通名词、泛泛的完成表述或已经由 gate、flow、comparison、metrics 结构清楚表达的信息；主要层次来自顺序、语义角色和 attention，而不是划词数量。"
 );
-const DEFAULT_EN_ATTENTION_PROMPT = `You are Aperture. Turn the agent's final answer into a continuous attention brief that a user can read without opening additional views. Lead with the most important result, then include only relationships and context that materially help understanding or action.
+const DEFAULT_ATTENTION_PROMPT = PREVIOUS_HIGHLIGHT_ATTENTION_PROMPT.replace(
+  "当前聚焦度为 {{focus}} / 100。它只由界面用来改变视觉权重，不用于隐藏或删除语义数据；你输出稳定、无重复的场景，所有入选内容都会在同一连续页面显示。",
+  `当前聚焦度为 {{focus}} / 100，对应目标信息压缩率 {{compressionPercent}}%，目标保留率 {{retentionPercent}}%，参考总篇幅上限约 {{targetCharacters}} 字。压缩率作用于提示词的信息筛选强度：优先删除低价值背景、实现细节、重复证据和可推迟阅读的内容，而不是生成完整内容后交给界面隐藏。聚焦度越高，越要删除整条次要关系，而不是把每条都缩短后保留。
+
+目标保留率只约束可选信息。唯一 spotlight 以及真实 decision、blocker、重大风险和采取行动所必需的信息不得因压缩率消失；聚焦度 100 表示只保留这些不可删除的核心，并不表示输出空结果。界面会完整显示你最终选择的全部内容。`
+);
+const PREVIOUS_EN_ATTENTION_PROMPT = `You are Aperture. Turn the agent's final answer into a continuous attention brief that a user can read without opening additional views. Lead with the most important result, then include only relationships and context that materially help understanding or action.
 
 Use the current question only to identify what the user cares about. Do not repeat or answer the question. All facts must come from the final answer. Remove greetings, process narration, repetition, tool noise, and meta commentary that adds no information.
 
@@ -263,6 +269,12 @@ Express each relationship once. Do not repeat the gate or spotlight in a view. U
 Highlights are scarce editorial marks. They must exactly match phrases in the text. Use 0-2 in the spotlight, 0-1 in each statement, and no more than 4 in the entire scene. Use key for a genuinely central object, change for a meaningful change, decision for a user choice, risk for a real risk, and verified for an explicitly verified fact. Do not highlight ordinary nouns or generic completion language.
 
 The current focus level is {{focus}} / 100. It changes visual emphasis only; do not delete supporting or context data because of it. Produce a stable, non-repetitive scene. Never add facts absent from the final answer.`;
+const DEFAULT_EN_ATTENTION_PROMPT = PREVIOUS_EN_ATTENTION_PROMPT.replace(
+  "The current focus level is {{focus}} / 100. It changes visual emphasis only; do not delete supporting or context data because of it. Produce a stable, non-repetitive scene. Never add facts absent from the final answer.",
+  `The current focus level is {{focus}} / 100, corresponding to a target information compression of {{compressionPercent}}%, a target retention of {{retentionPercent}}%, and an approximate total limit of {{targetCharacters}} characters. Apply this as prompt-level selection pressure: remove low-value background, implementation detail, repetitive evidence, and deferrable context instead of producing a complete result for the interface to hide. At higher focus, delete entire secondary relationships rather than shortening and retaining every one.
+
+The retention target applies only to optional information. The single spotlight and any real decision, blocker, major risk, or information required for action must survive compression. Focus 100 means retaining only this irreducible core, not producing an empty result. The interface will display everything you select. Never add facts absent from the final answer.`
+);
 const DEFAULT_ATTENTION_PROMPTS: Record<AppLanguage, string> = {
   cn: DEFAULT_ATTENTION_PROMPT,
   en: DEFAULT_EN_ATTENTION_PROMPT
@@ -280,8 +292,10 @@ const OLD_DEFAULT_PROMPTS = new Set([
   PREVIOUS_ATTENTION_SCENE_DEFAULT_PROMPT,
   PREVIOUS_CONTINUOUS_ATTENTION_PROMPT,
   PREVIOUS_DENSITY_ATTENTION_PROMPT,
-  PREVIOUS_STRICT_ATTENTION_PROMPT
+  PREVIOUS_STRICT_ATTENTION_PROMPT,
+  PREVIOUS_HIGHLIGHT_ATTENTION_PROMPT
 ]);
+const OLD_DEFAULT_EN_PROMPTS = new Set([PREVIOUS_EN_ATTENTION_PROMPT]);
 let monitoringEnabled = true;
 let monitoringAcceptAfter = 0;
 let focusLevel = 0.62;
@@ -320,7 +334,9 @@ try {
     cn: savedCnPrompt && !OLD_DEFAULT_PROMPTS.has(savedCnPrompt)
       ? savedCnPrompt
       : DEFAULT_ATTENTION_PROMPT,
-    en: savedEnPrompt || DEFAULT_EN_ATTENTION_PROMPT
+    en: savedEnPrompt && !OLD_DEFAULT_EN_PROMPTS.has(savedEnPrompt)
+      ? savedEnPrompt
+      : DEFAULT_EN_ATTENTION_PROMPT
   };
   if (Array.isArray(saved.unreadTurnKeys)) {
     unreadTurnKeys = new Set(saved.unreadTurnKeys.filter(
@@ -704,6 +720,7 @@ app.patch("/api/focus", async (req, res, next) => {
     await saveMonitoringSettings();
     const focus = { level: focusLevel };
     pushEvent("focus", focus);
+    scheduleLatestReanalysis();
     res.json({ focus });
   } catch (error) {
     next(error);
@@ -816,12 +833,27 @@ app.get("/api/review/current", async (req, res, next) => {
   }
 });
 
-app.patch("/api/inbox/seen", async (_req, res, next) => {
+app.patch("/api/inbox/seen", async (req, res, next) => {
   try {
-    markInboxSeen({ counted: countedTurnKeys, unread: unreadTurnKeys });
-    await saveMonitoringSettings();
-    const inbox = { unreadCount: 0 };
-    pushEvent("inbox", inbox);
+    const reviewId = String(req.body?.reviewId ?? "").trim();
+    if (!reviewId) {
+      res.status(400).json({ error: "reviewId is required" });
+      return;
+    }
+    const review = (await store.listReviews()).find(
+      (candidate) => candidate.id === reviewId
+    );
+    if (!review) {
+      res.status(404).json({ error: "review not found" });
+      return;
+    }
+    const changed = markInboxItemSeen(
+      { counted: countedTurnKeys, unread: unreadTurnKeys },
+      reviewTurnKey(review.runId, review.turnId)
+    );
+    if (changed) await saveMonitoringSettings();
+    const inbox = { unreadCount: unreadTurnKeys.size };
+    if (changed) pushEvent("inbox", inbox);
     res.json({ inbox });
   } catch (error) {
     next(error);
