@@ -14,6 +14,59 @@ Aperture is a macOS attention layer between human input bandwidth and model outp
 
 The attention pass is independent from the model used by Codex. Through OpenRouter, you can choose models from different upstream providers—including inexpensive, fast models—and turn monitoring on or off at any time.
 
+## Product tour
+
+<p align="center">
+  <img src="docs/images/aperture-workflow.svg" width="100%" alt="Aperture workflow from a completed Codex turn to an automatically generated attention scene">
+</p>
+
+Aperture watches local Codex tasks in the background. When a turn completes, it automatically takes the current question and complete final answer, uses an independent attention model to create a structured `AttentionScene`, and presents what deserves attention first in the floating companion. There is nothing to copy, paste, or trigger manually.
+
+### Collapse and expand: present when needed, peripheral when not
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Collapsed</strong></td>
+    <td width="50%" align="center"><strong>Expanded</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/aperture-collapsed.png" width="100%" alt="Aperture collapsed into a draggable bubble at the edge of the desktop"></td>
+    <td><img src="docs/images/aperture-expanded.jpg" width="100%" alt="Aperture expanded into a floating reading panel beside Codex"></td>
+  </tr>
+  <tr>
+    <td valign="top">Collapse the companion into a draggable bubble after reading. The entry point remains available without occupying the workspace.</td>
+    <td valign="top">Click the bubble to restore the floating window and read beside the current task without switching to a second workspace.</td>
+  </tr>
+</table>
+
+### Automatic attention pass: reorder reading priority instead of truncating text
+
+<p align="center">
+  <img src="docs/images/aperture-attention-ui.png" width="420" alt="Aperture attention scene showing a primary result, relationships, steps, and verification evidence">
+</p>
+
+The interface follows human reading priority from top to bottom:
+
+| UI component | The question it answers |
+| --- | --- |
+| **Primary result** | What did this turn actually accomplish? The largest type and whitespace put the conclusion first. |
+| **Decision / blocker** | Is there a real choice that needs the user, or a problem that makes the result unusable? These stay pinned only when they genuinely exist. |
+| **Relationship view** | Are the facts connected as steps, causes, comparisons, or metrics? Aperture chooses the matching `flow`, `comparison`, or `metrics` view. |
+| **Verification and evidence** | Which tests, builds, or facts support the result? Routine verification is compressed into high-value evidence. |
+| **Context** | What still matters without deserving the first glance? Higher focus reduces its visual weight. |
+
+New results appear automatically and are stored locally in actual completion order. Use the arrow keys to browse older or newer tasks. Focus changes visual hierarchy only—it does not call the model again or delete selected decisions, blockers, or facts.
+
+### Settings: control capture, reading, and the attention model
+
+<p align="center">
+  <img src="docs/images/aperture-settings.svg" width="100%" alt="Aperture settings grouped into capture, reading, and attention-model controls">
+</p>
+
+- **Capture:** enable or disable monitoring and switch between Chinese and English. Turns completed while monitoring is off are not backfilled.
+- **Reading:** adjust focus, light or dark appearance, and font size. These change presentation without rewriting history.
+- **Attention model:** configure the OpenRouter API key, model, and custom prompt. After a successful connection test, changes affect future attention scenes only.
+
 ## Quick start
 
 ### 1. Check the requirements
