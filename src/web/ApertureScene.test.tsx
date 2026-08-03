@@ -108,7 +108,7 @@ describe("ApertureSceneView", () => {
     );
   });
 
-  it("uses focus as visual contrast without removing context", () => {
+  it("keeps every model-selected relationship visible at high focus", () => {
     const { container } = render(
       <ApertureSceneView scene={sampleScene} focusLevel={0.9} />
     );
@@ -117,6 +117,7 @@ describe("ApertureSceneView", () => {
       "data-focus-band",
       "high"
     );
+    expect(screen.getByText("版本对比")).toBeInTheDocument();
     expect(screen.getByText("背景信息仍然完整可见。")).toBeInTheDocument();
     expect(screen.getByText("一个连续页面")).toHaveClass("semantic-mark--change");
     expect(screen.getByText("通过测试")).toHaveClass("semantic-mark--verified");

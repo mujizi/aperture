@@ -23,6 +23,9 @@ export function registerCompletedTurn(
   return true;
 }
 
-export function markInboxSeen(state: UnreadInboxState) {
-  state.unread.clear();
+export function markInboxItemSeen(
+  state: UnreadInboxState,
+  turnKey: string
+) {
+  return state.unread.delete(turnKey);
 }

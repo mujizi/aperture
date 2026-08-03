@@ -66,6 +66,10 @@ private struct InboxSummary: Decodable {
     let unreadCount: Int
 }
 
+private struct InboxEnvelope: Decodable {
+    let inbox: InboxSummary
+}
+
 private struct ReviewSummary: Decodable {
     let id: String
     let projectName: String?
@@ -417,6 +421,96 @@ private final class ApertureMarkView: NSView {
             )
         ).fill()
         context.restoreGState()
+    }
+}
+
+private final class ApertureCatMarkView: NSView {
+    private static let spriteSheet: NSImage? = {
+        guard let url = Bundle.main.url(
+            forResource: "ApertureCatSprite",
+            withExtension: "png"
+        ) else { return nil }
+        let image = NSImage(contentsOf: url)
+        image?.isTemplate = false
+        return image
+    }()
+    private static let subjectRect = NSRect(
+        x: 5,
+        y: 396,
+        width: 44,
+        height: 42
+    )
+
+    var actionHandler: (() -> Void)?
+    var connected = true {
+        didSet { needsDisplay = true }
+    }
+    var isDark = true {
+        didSet { needsDisplay = true }
+    }
+    var focusLevel: CGFloat = 0.62 {
+        didSet {
+            focusLevel = min(1, max(0, focusLevel))
+            needsDisplay = true
+        }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 29, height: 29)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        actionHandler?()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        actionHandler?()
+        return true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let spriteSheet = Self.spriteSheet else {
+            ApertureMarkView.render(
+                in: bounds,
+                connected: connected,
+                focusLevel: focusLevel,
+                isDark: isDark
+            )
+            return
+        }
+
+        let available = bounds.insetBy(dx: 2, dy: 2)
+        let scale = min(
+            available.width / Self.subjectRect.width,
+            available.height / Self.subjectRect.height
+        )
+        let targetSize = NSSize(
+            width: Self.subjectRect.width * scale,
+            height: Self.subjectRect.height * scale
+        )
+        let targetRect = NSRect(
+            x: available.midX - targetSize.width / 2 - 0.5,
+            y: available.midY - targetSize.height / 2,
+            width: targetSize.width,
+            height: targetSize.height
+        )
+        let context = NSGraphicsContext.current
+        let previousInterpolation = context?.imageInterpolation
+        context?.imageInterpolation = .none
+        spriteSheet.draw(
+            in: targetRect,
+            from: Self.subjectRect,
+            operation: .sourceOver,
+            fraction: connected ? 1 : 0.58,
+            respectFlipped: true,
+            hints: nil
+        )
+        if let previousInterpolation {
+            context?.imageInterpolation = previousInterpolation
+        }
     }
 }
 
@@ -1494,7 +1588,8 @@ private final class ResizeHandleView: NSView {
 }
 
 private final class ExpandedContainerView: NSVisualEffectView {
-    private let mark = ApertureMarkView(frame: .zero)
+    private let mark = ApertureCatMarkView(frame: .zero)
+    private let badge = NSTextField(labelWithString: "0")
     private let projectLabel = NSTextField(labelWithString: "")
     private let header = DragHeaderView(frame: .zero)
     private let separator = NSView(frame: .zero)
@@ -1552,6 +1647,13 @@ private final class ExpandedContainerView: NSVisualEffectView {
         mark.setAccessibilityLabel("收起 Aperture")
         header.addSubview(mark)
 
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.alignment = .center
+        badge.font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .bold)
+        badge.isHidden = true
+        badge.setAccessibilityLabel("未读结果")
+        header.addSubview(badge)
+
         projectLabel.translatesAutoresizingMaskIntoConstraints = false
         projectLabel.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
         projectLabel.lineBreakMode = .byTruncatingTail
@@ -1601,6 +1703,11 @@ private final class ExpandedContainerView: NSVisualEffectView {
             mark.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             mark.widthAnchor.constraint(equalToConstant: 29),
             mark.heightAnchor.constraint(equalToConstant: 29),
+
+            badge.topAnchor.constraint(equalTo: mark.topAnchor, constant: -4),
+            badge.trailingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 6),
+            badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 12),
+            badge.heightAnchor.constraint(equalToConstant: 13),
 
             projectLabel.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 10),
             projectLabel.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
@@ -1816,6 +1923,10 @@ private final class ExpandedContainerView: NSVisualEffectView {
 
     func update(state: AttentionState) {
         mark.connected = state.connected
+        badge.stringValue =
+            state.unreadCount > 99 ? "99+" : String(state.unreadCount)
+        badge.isHidden = state.unreadCount == 0
+        badge.setAccessibilityValue(String(state.unreadCount))
         monitoringSwitch.isEnabled = state.connected
     }
 
@@ -1838,6 +1949,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
         settingsButton.toolTip = value.text("打开设置", "Open settings")
         mark.toolTip = value.text("收起为图标", "Collapse to icon")
         mark.setAccessibilityLabel(value.text("收起 Aperture", "Collapse Aperture"))
+        badge.setAccessibilityLabel(value.text("未读结果", "Unread results"))
         projectLabel.setAccessibilityLabel(value.text("当前工程", "Current project"))
         monitoringSwitch.toolTip = value.text(
             "监控所有 Codex 回答",
@@ -1892,15 +2004,35 @@ private final class ExpandedContainerView: NSVisualEffectView {
         projectLabel.textColor = isDark
             ? NSColor(calibratedWhite: 0.72, alpha: 1)
             : NSColor(calibratedWhite: 0.28, alpha: 1)
+        badge.textColor = isDark
+            ? NSColor(calibratedRed: 0.36, green: 0.88, blue: 0.62, alpha: 1)
+            : NSColor(calibratedRed: 0.10, green: 0.58, blue: 0.34, alpha: 1)
         settingsButton.contentTintColor = tint
     }
 }
 
 private final class BubbleView: NSView {
+    private static let spriteFrameSize: CGFloat = 64
+    private static let spriteColumns = 8
+    private static let spriteRows = 7
+    private static let spriteFrameCount = 56
+    private static let spriteSheet: NSImage? = {
+        guard let url = Bundle.main.url(
+            forResource: "ApertureCatSprite",
+            withExtension: "png"
+        ) else { return nil }
+        let image = NSImage(contentsOf: url)
+        image?.isTemplate = false
+        return image
+    }()
+
     private let badge = NSTextField(labelWithString: "0")
     private var bubbleConnected = false
     private var bubbleFocus: CGFloat = 0.62
     private var bubbleIsDark = true
+    private var animationFrame = 0
+    private var animationTimer: Timer?
+    private var lastUnreadCount = 0
     private var mouseDownLocation: NSPoint?
     private var windowOriginAtMouseDown: NSPoint?
     private var didDrag = false
@@ -1910,10 +2042,10 @@ private final class BubbleView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = 16
-        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = 0
         layer?.masksToBounds = false
         layer?.borderWidth = 0
+        layer?.backgroundColor = NSColor.clear.cgColor
 
         badge.translatesAutoresizingMaskIntoConstraints = false
         badge.alignment = .center
@@ -1933,11 +2065,11 @@ private final class BubbleView: NSView {
             badge.heightAnchor.constraint(equalToConstant: 13)
         ])
 
-        toolTip = "Aperture · 点击展开，拖动可移动"
+        toolTip = "Aperture · 点击展开，拖动可移动图标"
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel("展开 Aperture")
-        setAccessibilityHelp("点击展开注意力侧边栏，拖动可移动气泡")
+        setAccessibilityHelp("点击展开注意力侧边栏，拖动可移动猫咪图标")
         update(state: AttentionState(
             reviewID: nil,
             unreadCount: 0,
@@ -1950,8 +2082,38 @@ private final class BubbleView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        animationTimer?.invalidate()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        if let spriteSheet = Self.spriteSheet {
+            let column = animationFrame % Self.spriteColumns
+            let row = animationFrame / Self.spriteColumns
+            let sourceRect = NSRect(
+                x: CGFloat(column) * Self.spriteFrameSize,
+                y: CGFloat(Self.spriteRows - row - 1) * Self.spriteFrameSize,
+                width: Self.spriteFrameSize,
+                height: Self.spriteFrameSize
+            )
+            let context = NSGraphicsContext.current
+            let previousInterpolation = context?.imageInterpolation
+            context?.imageInterpolation = .none
+            spriteSheet.draw(
+                in: bounds,
+                from: sourceRect,
+                operation: .sourceOver,
+                fraction: bubbleConnected ? 1 : 0.58,
+                respectFlipped: true,
+                hints: nil
+            )
+            if let previousInterpolation {
+                context?.imageInterpolation = previousInterpolation
+            }
+            return
+        }
+
         let diameter = max(0, min(bounds.width, bounds.height) - 14)
         ApertureMarkView.render(
             in: NSRect(
@@ -1967,11 +2129,53 @@ private final class BubbleView: NSView {
     }
 
     func update(state: AttentionState) {
+        let shouldAnimate =
+            state.connected && state.unreadCount > lastUnreadCount
+        lastUnreadCount = state.unreadCount
         bubbleConnected = state.connected
         needsDisplay = true
         badge.stringValue =
             state.unreadCount > 99 ? "99+" : String(state.unreadCount)
         badge.isHidden = state.unreadCount == 0
+        if !state.connected {
+            stopFocusAnimation()
+        } else if shouldAnimate {
+            playFocusAnimation()
+        }
+    }
+
+    func playFocusAnimation() {
+        guard
+            window != nil,
+            bubbleConnected,
+            Self.spriteSheet != nil,
+            !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        else { return }
+        stopFocusAnimation()
+        animationFrame = 0
+        needsDisplay = true
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            self.animationFrame += 1
+            if self.animationFrame >= Self.spriteFrameCount {
+                timer.invalidate()
+                self.animationTimer = nil
+                self.animationFrame = 0
+            }
+            self.needsDisplay = true
+        }
+        animationTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopFocusAnimation() {
+        animationTimer?.invalidate()
+        animationTimer = nil
+        animationFrame = 0
+        needsDisplay = true
     }
 
     func setFocus(level: Double) {
@@ -1981,28 +2185,19 @@ private final class BubbleView: NSView {
 
     func setLanguage(_ value: AppLanguage) {
         toolTip = value.text(
-            "Aperture · 点击展开，拖动可移动",
-            "Aperture · Click to expand, drag to move"
+            "Aperture · 点击展开，拖动可移动图标",
+            "Aperture · Click to expand, drag to move the icon"
         )
         setAccessibilityLabel(value.text("展开 Aperture", "Expand Aperture"))
         setAccessibilityHelp(value.text(
-            "点击展开注意力侧边栏，拖动可移动气泡",
-            "Click to expand the attention sidebar; drag to move the bubble"
+            "点击展开注意力侧边栏，拖动可移动猫咪图标",
+            "Click to expand the attention sidebar; drag to move the cat icon"
         ))
     }
 
     func setTheme(isDark: Bool) {
         bubbleIsDark = isDark
-        layer?.backgroundColor = (
-            isDark
-                ? NSColor(
-                    calibratedRed: 0.055,
-                    green: 0.070,
-                    blue: 0.080,
-                    alpha: 0.94
-                )
-                : NSColor(calibratedWhite: 0.985, alpha: 0.96)
-        ).cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
         layer?.borderWidth = 0
         badge.textColor = isDark
             ? NSColor(calibratedRed: 0.36, green: 0.88, blue: 0.62, alpha: 1)
@@ -2011,9 +2206,17 @@ private final class BubbleView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        stopFocusAnimation()
         mouseDownLocation = NSEvent.mouseLocation
         windowOriginAtMouseDown = window?.frame.origin
         didDrag = false
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil {
+            stopFocusAnimation()
+        }
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -2064,6 +2267,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private var hasBaseline = false
     private var latestReviewID: String?
     private var displayedReviewID: String?
+    private var acknowledgedReviewIDs = Set<String>()
+    private var pendingSeenReviewIDs = Set<String>()
+    private var seenReviewQueue: [String] = []
+    private var isMarkingReviewSeen = false
     private var state = AttentionState(
         reviewID: nil,
         unreadCount: 0,
@@ -2419,9 +2626,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         } else if isNewReview {
             panel.orderFrontRegardless()
         }
-        if isExpanded, next.unreadCount > 0 {
-            markInboxSeen()
-        }
     }
 
     private func currentScreen() -> NSScreen {
@@ -2515,6 +2719,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         isExpanded = true
         let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
         let target = expandedFrame(anchoredAt: topLeft)
+        panel.hasShadow = true
         panel.styleMask.remove(.nonactivatingPanel)
         panel.styleMask.insert(.resizable)
         panel.minSize = NSSize(width: 320, height: 360)
@@ -2528,7 +2733,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }
         panel.orderFrontRegardless()
         loadWebView(force: false)
-        markInboxSeen()
+        markReviewSeen(displayedReviewID)
     }
 
     private func collapse() {
@@ -2550,6 +2755,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }, completionHandler: {
             self.panel.contentView = self.bubbleView
             self.panel.setFrame(target, display: true)
+            self.panel.hasShadow = false
             self.bubbleView.frame = NSRect(
                 origin: .zero,
                 size: target.size
@@ -2557,6 +2763,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             self.bubbleView.autoresizingMask = [.width, .height]
             self.expandedView.alphaValue = 1
             self.bubbleView.update(state: self.state)
+            self.bubbleView.playFocusAnimation()
         })
     }
 
@@ -2608,22 +2815,50 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }.resume()
     }
 
-    private func markInboxSeen() {
-        guard state.unreadCount > 0 else { return }
-        state = AttentionState(
-            reviewID: state.reviewID,
-            unreadCount: 0,
-            connected: state.connected
-        )
-        bubbleView.update(state: state)
+    private func markReviewSeen(_ reviewID: String?) {
+        guard
+            let reviewID,
+            !acknowledgedReviewIDs.contains(reviewID),
+            !pendingSeenReviewIDs.contains(reviewID)
+        else { return }
+        pendingSeenReviewIDs.insert(reviewID)
+        seenReviewQueue.append(reviewID)
+        processNextSeenReview()
+    }
+
+    private func processNextSeenReview() {
+        guard !isMarkingReviewSeen, !seenReviewQueue.isEmpty else { return }
+        isMarkingReviewSeen = true
+        let reviewID = seenReviewQueue.removeFirst()
         var request = URLRequest(url: inboxSeenURL)
         request.httpMethod = "PATCH"
         request.timeoutInterval = 2.5
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["reviewId": reviewID]
+        )
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
             guard let self else { return }
-            if (response as? HTTPURLResponse)?.statusCode != 200 {
-                DispatchQueue.main.async { self.refresh() }
+            let envelope = data.flatMap {
+                try? JSONDecoder().decode(InboxEnvelope.self, from: $0)
+            }
+            DispatchQueue.main.async {
+                self.pendingSeenReviewIDs.remove(reviewID)
+                self.isMarkingReviewSeen = false
+                if (response as? HTTPURLResponse)?.statusCode == 200,
+                   let envelope {
+                    self.acknowledgedReviewIDs.insert(reviewID)
+                    self.state = AttentionState(
+                        reviewID: self.state.reviewID,
+                        unreadCount: envelope.inbox.unreadCount,
+                        connected: self.state.connected
+                    )
+                    self.expandedView.update(state: self.state)
+                    self.bubbleView.update(state: self.state)
+                } else {
+                    self.refresh()
+                }
+                self.processNextSeenReview()
             }
         }.resume()
     }
@@ -2741,6 +2976,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         if type == "displayedReview" {
             displayedReviewID = body["reviewId"] as? String
             expandedView.setProjectName(body["projectName"] as? String)
+            if isExpanded {
+                markReviewSeen(displayedReviewID)
+            }
             return
         }
         guard type == "review" else { return }
