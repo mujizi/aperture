@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Aperture automated attention workflow</title>
+  <desc id="desc">A Codex turn completes, Aperture captures the final answer, an attention model creates an AttentionScene, and the floating companion can expand or collapse into a bubble.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f8f4"/>
+      <stop offset="1" stop-color="#edf2f1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8aa3a0"/>
+      <stop offset="1" stop-color="#b7c8be"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="145%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#24302f" flood-opacity=".10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8a9a98"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="360" rx="30" fill="url(#bg)"/>
+  <text x="52" y="58" fill="#202625" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="26" font-weight="700">一轮完成，注意力自动就位</text>
+  <text x="52" y="87" fill="#66716f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15">From a completed Codex turn to a readable AttentionScene — no copy and paste.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="52" y="125" width="210" height="158" rx="22" fill="#ffffff"/>
+    <circle cx="87" cy="163" r="17" fill="#e8eef8"/>
+    <path d="M80 156h14v14H80z M83 159h8M83 163h8M83 167h5" fill="none" stroke="#5276a5" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="113" y="158" fill="#202625" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18" font-weight="700">Codex 完成任务</text>
+    <text x="113" y="179" fill="#71807d" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">Turn complete</text>
+    <text x="78" y="220" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">本轮问题</text>
+    <text x="78" y="246" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">完整最终回答</text>
+  </g>
+
+  <path d="M275 204H318" stroke="#8a9a98" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="330" y="125" width="210" height="158" rx="22" fill="#ffffff"/>
+    <circle cx="365" cy="163" r="17" fill="#eaf3ef"/>
+    <path d="M358 163h14M365 156v14" stroke="#4c8a72" stroke-width="2" stroke-linecap="round"/>
+    <text x="391" y="158" fill="#202625" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18" font-weight="700">自动捕获</text>
+    <text x="391" y="179" fill="#71807d" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">Local watcher</text>
+    <text x="356" y="220" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">监听本地 session</text>
+    <text x="356" y="246" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">清理工具噪声</text>
+  </g>
+
+  <path d="M553 204H596" stroke="#8a9a98" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="608" y="125" width="230" height="158" rx="22" fill="#ffffff"/>
+    <circle cx="643" cy="163" r="17" fill="#f5eddd"/>
+    <path d="M636 166c3-10 11-10 14 0M638 158h10" fill="none" stroke="#a67a31" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="669" y="158" fill="#202625" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18" font-weight="700">注意力转换</text>
+    <text x="669" y="179" fill="#71807d" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">Attention model</text>
+    <text x="634" y="220" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">主结果 · 决定 · 阻塞</text>
+    <text x="634" y="246" fill="#46504f" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">关系 · 证据 · 背景</text>
+  </g>
+
+  <path d="M851 204H894" stroke="#8a9a98" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="906" y="125" width="242" height="158" rx="22" fill="#202625"/>
+    <circle cx="941" cy="163" r="17" fill="url(#accent)"/>
+    <circle cx="941" cy="163" r="7" fill="#ffffff"/>
+    <text x="967" y="158" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18" font-weight="700">AttentionScene</text>
+    <text x="967" y="179" fill="#b9c3c1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">Floating companion</text>
+    <rect x="932" y="208" width="86" height="35" rx="17.5" fill="#ffffff" fill-opacity=".12"/>
+    <text x="975" y="231" fill="#ffffff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">展开阅读</text>
+    <rect x="1028" y="208" width="94" height="35" rx="17.5" fill="#ffffff" fill-opacity=".12"/>
+    <text x="1075" y="231" fill="#ffffff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="13">收起气泡</text>
+  </g>
+
+  <text x="600" y="329" fill="#71807d" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="14">自动出现 · 本地保存 · 可回看历史 · 聚焦只改变视觉权重</text>
+</svg>
