@@ -14,7 +14,9 @@ import { CodexSessionWatcher } from "./session-watcher.js";
 import { EventStore } from "./store.js";
 import {
   markInboxItemSeen,
-  registerCompletedTurn
+  registerCompletedTurn,
+  reviewTurnKey,
+  unreadReviewIds
 } from "./unread-inbox.js";
 import type { AgentEvent, AppLanguage, ReviewSnapshot } from "../core/types.js";
 
@@ -355,10 +357,6 @@ try {
 
 function currentPrompt() {
   return customPrompts[language];
-}
-
-function reviewTurnKey(runId: string, turnId: string | null) {
-  return `${runId}:${turnId ?? "latest"}`;
 }
 
 if (!hasStoredInboxState) {
@@ -812,7 +810,14 @@ app.post("/api/analyze", async (req, res, next) => {
 
 app.get("/api/reviews", async (req, res, next) => {
   try {
-    res.json({ reviews: await store.listReviews(req.query.runId?.toString()) });
+    const reviews = await store.listReviews(req.query.runId?.toString());
+    res.json({
+      reviews,
+      inbox: {
+        unreadCount: unreadTurnKeys.size,
+        unreadReviewIds: unreadReviewIds(reviews, unreadTurnKeys)
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -840,9 +845,7 @@ app.patch("/api/inbox/seen", async (req, res, next) => {
       res.status(400).json({ error: "reviewId is required" });
       return;
     }
-    const review = (await store.listReviews()).find(
-      (candidate) => candidate.id === reviewId
-    );
+    const review = await store.findReview(reviewId);
     if (!review) {
       res.status(404).json({ error: "review not found" });
       return;

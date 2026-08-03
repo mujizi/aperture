@@ -17,7 +17,10 @@ export async function getCurrentReview() {
 }
 
 export async function getReviews() {
-  return json<{ reviews: ReviewSnapshot[] }>("/api/reviews");
+  return json<{
+    reviews: ReviewSnapshot[];
+    inbox: { unreadCount: number; unreadReviewIds: string[] };
+  }>("/api/reviews");
 }
 
 export async function getConfig() {

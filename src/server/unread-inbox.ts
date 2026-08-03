@@ -1,6 +1,26 @@
+import type { ReviewSnapshot } from "../core/types.js";
+
 export interface UnreadInboxState {
   unread: Set<string>;
   counted: Set<string>;
+}
+
+export function reviewTurnKey(runId: string, turnId: string | null) {
+  return `${runId}:${turnId ?? "latest"}`;
+}
+
+export function unreadReviewIds(
+  reviews: Pick<ReviewSnapshot, "id" | "runId" | "turnId">[],
+  unreadTurnKeys: Set<string>
+) {
+  const latestReviewByTurn = new Map<string, string>();
+  for (const review of reviews) {
+    const turnKey = reviewTurnKey(review.runId, review.turnId);
+    if (unreadTurnKeys.has(turnKey)) {
+      latestReviewByTurn.set(turnKey, review.id);
+    }
+  }
+  return [...latestReviewByTurn.values()];
 }
 
 function trimSet(values: Set<string>, maximum: number) {

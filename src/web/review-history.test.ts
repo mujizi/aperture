@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewSnapshot } from "../core/types";
-import { mergeReviewHistory } from "./review-history";
+import {
+  adjacentHistoryOffset,
+  mergeReviewHistory,
+  newestUnreadHistoryOffset
+} from "./review-history";
 
 function review(
   runId: string,
@@ -67,5 +71,20 @@ describe("review history", () => {
 
     expect(mergeReviewHistory([preview], [real]).map((item) => item.runId))
       .toEqual(["preview", "real"]);
+  });
+
+  it("opens the newest unread page and skips read pages while paging", () => {
+    const reviews = [
+      review("old-unread", "turn-1", "2026-08-01T07:00:00.000Z"),
+      review("read-gap", "turn-2", "2026-08-01T08:00:00.000Z"),
+      review("new-unread", "turn-3", "2026-08-01T09:00:00.000Z"),
+      review("already-read", "turn-4", "2026-08-01T10:00:00.000Z")
+    ];
+    const unread = new Set([reviews[0].id, reviews[2].id]);
+    const initialOffset = newestUnreadHistoryOffset(reviews, unread);
+
+    expect(initialOffset).toBe(1);
+    unread.delete(reviews[2].id);
+    expect(adjacentHistoryOffset(reviews, initialOffset, "older", unread)).toBe(3);
   });
 });

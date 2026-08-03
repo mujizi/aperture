@@ -71,7 +71,7 @@ New results appear automatically and are stored locally in actual completion ord
 
 ### 1. Check the requirements
 
-The current `v0.2.1` preview requires:
+The current `v0.2.2` preview requires:
 
 - An Apple Silicon Mac (M1/M2/M3/M4 and later; Intel Macs are not supported yet)
 - macOS 13 Ventura or later
@@ -96,7 +96,7 @@ brew install node
 
 ### 2. Install Aperture
 
-1. Download `Aperture-v0.2.1-macos-arm64.dmg` or `.zip` from [Releases](https://github.com/mujizi/aperture/releases/latest).
+1. Download `Aperture-v0.2.2-macos-arm64.dmg` or `.zip` from [Releases](https://github.com/mujizi/aperture/releases/latest).
 2. Move `Aperture.app` to `/Applications`.
 3. On first launch, Control-click or right-click Aperture and choose **Open**.
 4. If macOS still blocks it, approve the app in **System Settings → Privacy & Security**.
@@ -258,7 +258,7 @@ Aperture aims to make these AI usage records local, automatically organized, and
 - the user's own preferences, judgment patterns, and ways of working;
 - proven, valuable model-use experience that can be invoked again.
 
-A future Aperture should not only explain what happened in the current turn. It should also help people own, organize, and reuse the experience they create with AI. This is a product direction, not a claim that every capability above is already available in the current `v0.2.1` preview.
+A future Aperture should not only explain what happened in the current turn. It should also help people own, organize, and reuse the experience they create with AI. This is a product direction, not a claim that every capability above is already available in the current `v0.2.2` preview.
 
 ## Design philosophy
 

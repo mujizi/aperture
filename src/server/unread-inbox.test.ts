@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   markInboxItemSeen,
   registerCompletedTurn,
+  unreadReviewIds,
   type UnreadInboxState
 } from "./unread-inbox.js";
 
@@ -29,5 +30,17 @@ describe("unread answer inbox", () => {
     markInboxItemSeen(state, "run-1:turn-1");
     expect(registerCompletedTurn(state, "run-1:turn-1")).toBe(false);
     expect(state.unread.size).toBe(0);
+  });
+
+  it("maps unread turns to their latest review snapshot", () => {
+    const reviews = [
+      { id: "turn-1-old", runId: "run", turnId: "turn-1" },
+      { id: "turn-2", runId: "run", turnId: "turn-2" },
+      { id: "turn-1-latest", runId: "run", turnId: "turn-1" }
+    ];
+
+    expect(unreadReviewIds(reviews, new Set(["run:turn-1"]))).toEqual([
+      "turn-1-latest"
+    ]);
   });
 });
