@@ -9,7 +9,11 @@ import { ApertureSceneView } from "./ApertureScene";
 import { AttentionDocumentView } from "./AttentionDocument";
 import { AttentionMarkdown } from "./AttentionMarkdown";
 import { getCurrentReview, getReviews } from "./api";
-import { mergeReviewHistory } from "./review-history";
+import {
+  adjacentHistoryOffset,
+  mergeReviewHistory,
+  newestUnreadHistoryOffset
+} from "./review-history";
 import { ui } from "./i18n";
 
 declare global {
@@ -124,6 +128,9 @@ export function CompanionApp() {
   const [focusLevel, setFocusLevel] = useState(0.62);
   const [language, setLanguage] = useState<AppLanguage>("cn");
   const [reviewHistory, setReviewHistory] = useState<ReviewSnapshot[]>([]);
+  const [unreadReviewIds, setUnreadReviewIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [historyOffset, setHistoryOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>("idle");
@@ -190,7 +197,13 @@ export function CompanionApp() {
         setFocusLevel(focus.level);
         setLanguage(currentLanguage.value);
         setReviewHistory(reviews);
-        setHistoryOffset(0);
+        const initialUnreadReviewIds = new Set(
+          history.inbox?.unreadReviewIds ?? []
+        );
+        setUnreadReviewIds(initialUnreadReviewIds);
+        setHistoryOffset(
+          newestUnreadHistoryOffset(reviews, initialUnreadReviewIds)
+        );
         setPhase(
           currentMonitoring.enabled && reviews.length ? "complete" : "waiting"
         );
@@ -255,6 +268,13 @@ export function CompanionApp() {
 
   useEffect(() => {
     notifyDisplayedReview(review);
+    if (!review) return;
+    setUnreadReviewIds((current) => {
+      if (!current.has(review.id)) return current;
+      const next = new Set(current);
+      next.delete(review.id);
+      return next;
+    });
   }, [review]);
 
   useEffect(() => {
@@ -311,20 +331,32 @@ export function CompanionApp() {
       if (event.key === "ArrowLeft" && historyOffset < reviewHistory.length - 1) {
         event.preventDefault();
         setHistoryOffset((current) =>
-          Math.min(reviewHistory.length - 1, current + 1)
+          adjacentHistoryOffset(
+            reviewHistory,
+            current,
+            "older",
+            unreadReviewIds
+          )
         );
         shellRef.current?.scrollTo({ top: 0, behavior: "auto" });
       }
       if (event.key === "ArrowRight" && historyOffset > 0) {
         event.preventDefault();
-        setHistoryOffset((current) => Math.max(0, current - 1));
+        setHistoryOffset((current) =>
+          adjacentHistoryOffset(
+            reviewHistory,
+            current,
+            "newer",
+            unreadReviewIds
+          )
+        );
         shellRef.current?.scrollTo({ top: 0, behavior: "auto" });
       }
     };
 
     window.addEventListener("keydown", turnPage);
     return () => window.removeEventListener("keydown", turnPage);
-  }, [historyOffset, reviewHistory.length]);
+  }, [historyOffset, reviewHistory, unreadReviewIds]);
 
   return (
     <main className="minimal-shell" ref={shellRef}>

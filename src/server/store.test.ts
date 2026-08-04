@@ -33,6 +33,25 @@ describe("event store projections", () => {
     expect(latest).toEqual(expect.objectContaining({ id: "review-1" }));
   });
 
+  it("finds a displayed review without loading the event history", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
+    tempDirs.push(dir);
+    const store = new EventStore(dir);
+    const review = {
+      id: "displayed-review",
+      runId: "run-1",
+      turnId: "turn-1",
+      generatedAt: new Date().toISOString(),
+      resultMarkdown: "Displayed result",
+      analysis: { mode: "model", model: "test/model", durationMs: 1, error: null }
+    } satisfies ReviewSnapshot;
+
+    await store.appendReview(review);
+
+    await expect(store.findReview("displayed-review")).resolves.toEqual(review);
+    await expect(store.findReview("missing-review")).resolves.toBeNull();
+  });
+
   it("selects the latest completed turn instead of the latest appended review", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-store-"));
     tempDirs.push(dir);
