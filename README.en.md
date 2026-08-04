@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="native/ApertureCompanion/AppIcon.svg" width="112" alt="Aperture app icon">
+  <img src="docs/images/aperture-cat.png" width="160" alt="Aperture pixel-cat hero image">
 </p>
 
 <h1 align="center">Aperture</h1>

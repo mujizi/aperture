@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="native/ApertureCompanion/AppIcon.svg" width="112" alt="Aperture App 标志">
+  <img src="docs/images/aperture-cat.png" width="160" alt="Aperture 像素猫主图">
 </p>
 
 <h1 align="center">Aperture</h1>
