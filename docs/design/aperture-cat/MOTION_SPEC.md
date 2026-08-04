@@ -25,11 +25,11 @@ Total duration: 2.8 s. Most of the loop is intentionally still.
 
 ## Behavior
 
-- Recommended trigger: play once when a new unread result arrives, then return
-  to a still icon. Do not animate continuously while the app is idle.
-- If a continuous idle loop is desired, increase the rest hold so the action
-  repeats no more than once every 6–8 seconds.
-- Dragging, clicking, and expanding should cancel the current loop cleanly.
+- Play immediately when the companion collapses or a new unread result arrives.
+- While collapsed and connected, repeat the observation action at a randomized
+  6.5–8 second start-to-start interval; keep the icon still between actions.
+- A new unread result resets the idle interval so two loops never overlap.
+- Dragging, clicking, expanding, or disconnecting cancels the current loop.
 - With Reduce Motion enabled, skip translation and rotation; use only the single
   blink or keep the icon completely still.
 

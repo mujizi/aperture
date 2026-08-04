@@ -239,6 +239,14 @@ Build and install locally:
 npm run install:mac
 ```
 
+After development, use the full restart command. It rebuilds the app, stops all
+Aperture windows and the old daemon, waits for port 4317, installs and launches
+the latest build, then verifies the health endpoint and model catalog:
+
+```bash
+npm run restart:mac
+```
+
 Create the `.dmg`, `.zip`, and SHA-256 files used by GitHub Releases:
 
 ```bash

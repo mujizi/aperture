@@ -12,6 +12,7 @@
     "build": "npm run build:web && npm run build:server && npm run validate:plugin",
     "build:mac": "scripts/build-macos-app.sh",
     "install:mac": "scripts/install-macos-app.sh",
+    "restart:mac": "scripts/install-macos-app.sh",
     "package:mac": "scripts/package-macos.sh",
     "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",

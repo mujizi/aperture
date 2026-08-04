@@ -200,7 +200,7 @@ private final class ActionButton: NSButton {
 }
 
 private final class FocusSliderCell: NSSliderCell {
-    var activeColor = NSColor.systemYellow
+    var activeColor = NSColor.labelColor
     var inactiveColor = NSColor.separatorColor
     var knobColor = NSColor.controlBackgroundColor
     var knobBorderColor = NSColor.separatorColor
@@ -209,11 +209,11 @@ private final class FocusSliderCell: NSSliderCell {
         let knobWidth = max(14, knobRect(flipped: flipped).width)
         let trackRect = NSRect(
             x: rect.minX + knobWidth / 2,
-            y: rect.midY - 2,
+            y: rect.midY - 1.5,
             width: max(0, rect.width - knobWidth),
-            height: 4
+            height: 3
         )
-        let track = NSBezierPath(roundedRect: trackRect, xRadius: 2, yRadius: 2)
+        let track = NSBezierPath(roundedRect: trackRect, xRadius: 1.5, yRadius: 1.5)
         inactiveColor.setFill()
         track.fill()
 
@@ -227,36 +227,30 @@ private final class FocusSliderCell: NSSliderCell {
         )
         guard fillRect.width > 0 else { return }
         activeColor.setFill()
-        NSBezierPath(roundedRect: fillRect, xRadius: 2, yRadius: 2).fill()
+        NSBezierPath(roundedRect: fillRect, xRadius: 1.5, yRadius: 1.5).fill()
     }
 
     override func drawKnob(_ knobRect: NSRect) {
-        let diameter: CGFloat = 16
+        let diameter: CGFloat = 14
         let circleRect = NSRect(
             x: knobRect.midX - diameter / 2,
             y: knobRect.midY - diameter / 2,
             width: diameter,
             height: diameter
         )
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.16)
-        shadow.shadowBlurRadius = 4
-        shadow.shadowOffset = NSSize(width: 0, height: -1)
-        shadow.set()
         let circle = NSBezierPath(ovalIn: circleRect)
         knobColor.setFill()
         circle.fill()
-        NSGraphicsContext.restoreGraphicsState()
 
         knobBorderColor.setStroke()
-        circle.lineWidth = 0.75
+        circle.lineWidth = 1
         circle.stroke()
     }
 }
 
 private final class FocusSlider: NSSlider {
     private let minimalCell = FocusSliderCell()
+    private(set) var isUserInteracting = false
 
     var activeColor: NSColor {
         get { minimalCell.activeColor }
@@ -288,6 +282,12 @@ private final class FocusSlider: NSSlider {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        isUserInteracting = true
+        super.mouseDown(with: event)
+        isUserInteracting = false
     }
 }
 
@@ -580,6 +580,7 @@ private final class SettingsViewController: NSViewController {
     private var apiKeyConfigured = false
     private var allModels: [ModelOption] = []
     private var showsFreeModelsOnly = false
+    private var isLoadingModels = false
     private var focusHandler: ((Double) -> Void)?
     private var themeHandler: ((Bool) -> Void)?
     private var sizeHandler: ((Int) -> Void)?
@@ -647,6 +648,7 @@ private final class SettingsViewController: NSViewController {
         focusSlider.translatesAutoresizingMaskIntoConstraints = false
         focusSlider.controlSize = .regular
         focusSlider.isContinuous = true
+        focusSlider.focusRingType = .none
         focusSlider.toolTip = "向左保留更多细节，向右只看核心信息"
         focusSlider.setAccessibilityLabel("聚焦度")
         focusSlider.target = self
@@ -811,6 +813,7 @@ private final class SettingsViewController: NSViewController {
     }
 
     func setFocus(level: Double) {
+        guard !focusSlider.isUserInteracting else { return }
         focusSlider.doubleValue = min(1, max(0, level))
     }
 
@@ -906,37 +909,51 @@ private final class SettingsViewController: NSViewController {
                 self.visibleKeyField.stringValue = config.apiKey
                 self.apiKeyConfigured = !config.apiKey.isEmpty
                 self.updateKeyPlaceholder()
-                if self.apiKeyConfigured {
-                    self.fetchModels()
-                }
+                self.fetchModels()
             }
         }.resume()
     }
 
     private func fetchModels() {
+        guard !isLoadingModels else { return }
+        isLoadingModels = true
+        refreshModelsButton.isEnabled = false
+        freeModelsButton.isEnabled = false
         setModelStatus(language.text("正在拉取模型…", "Loading models…"), success: nil)
-        postJSON(url: modelsURL, body: requestBody()) { [weak self] data, response in
+        var request = URLRequest(url: modelsURL)
+        request.timeoutInterval = 20
+        request.cachePolicy = .reloadRevalidatingCacheData
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self else { return }
             guard
                 let data,
-                let response,
-                (200..<300).contains(response.statusCode),
+                let httpResponse = response as? HTTPURLResponse,
+                (200..<300).contains(httpResponse.statusCode),
                 let payload = try? JSONDecoder().decode(
                     ModelListEnvelope.self,
                     from: data
                 )
             else {
+                DispatchQueue.main.async { self.finishLoadingModels() }
                 self.showAPIError(
                     data,
-                    fallback: self.language.text("模型列表拉取失败", "Could not load models")
+                    fallback: self.language.text("模型列表拉取失败", "Could not load models"),
+                    error: error
                 )
                 return
             }
             DispatchQueue.main.async {
+                self.finishLoadingModels()
                 self.allModels = payload.models
                 self.applyModelFilter()
             }
-        }
+        }.resume()
+    }
+
+    private func finishLoadingModels() {
+        isLoadingModels = false
+        refreshModelsButton.isEnabled = true
+        freeModelsButton.isEnabled = true
     }
 
     private func toggleFreeModels() {
@@ -1092,9 +1109,18 @@ private final class SettingsViewController: NSViewController {
         }.resume()
     }
 
-    private func showAPIError(_ data: Data?, fallback: String) {
+    private func showAPIError(
+        _ data: Data?,
+        fallback: String,
+        error: Error? = nil
+    ) {
         let message = data.flatMap {
             try? JSONDecoder().decode(APIErrorEnvelope.self, from: $0).error
+        } ?? error.map {
+            language.text(
+                "网络请求失败：\($0.localizedDescription)",
+                "Network request failed: \($0.localizedDescription)"
+            )
         } ?? fallback
         DispatchQueue.main.async {
             self.setModelStatus(message, success: false)
@@ -1152,17 +1178,17 @@ private final class SettingsViewController: NSViewController {
             label.textColor = text
         }
         focusSlider.activeColor = isDark
-            ? NSColor(calibratedRed: 0.92, green: 0.70, blue: 0.29, alpha: 1)
-            : NSColor(calibratedRed: 0.65, green: 0.43, blue: 0.04, alpha: 1)
+            ? NSColor(calibratedWhite: 0.84, alpha: 1)
+            : NSColor(calibratedWhite: 0.24, alpha: 1)
         focusSlider.inactiveColor = isDark
-            ? NSColor(calibratedWhite: 0.31, alpha: 0.58)
-            : NSColor(calibratedWhite: 0.82, alpha: 1)
+            ? NSColor(calibratedWhite: 0.28, alpha: 0.72)
+            : NSColor(calibratedWhite: 0.86, alpha: 1)
         focusSlider.knobColor = isDark
-            ? NSColor(calibratedWhite: 0.94, alpha: 1)
+            ? NSColor(calibratedWhite: 0.88, alpha: 1)
             : NSColor.white
         focusSlider.knobBorderColor = isDark
-            ? NSColor(calibratedWhite: 0.06, alpha: 0.44)
-            : NSColor(calibratedWhite: 0.68, alpha: 0.72)
+            ? NSColor(calibratedWhite: 0.42, alpha: 1)
+            : NSColor(calibratedWhite: 0.60, alpha: 1)
         let tint = isDark
             ? NSColor(calibratedWhite: 0.72, alpha: 1)
             : NSColor(calibratedWhite: 0.36, alpha: 1)
@@ -1787,6 +1813,10 @@ private final class BubbleView: NSView {
     private static let spriteColumns = 8
     private static let spriteRows = 7
     private static let spriteFrameCount = 56
+    private static let animationFrameInterval: TimeInterval = 0.05
+    // The 2.8-second sprite loop plus this rest produces a new observation
+    // roughly every 6.5-8 seconds without feeling mechanically periodic.
+    private static let idleRestDelayRange: ClosedRange<TimeInterval> = 3.7...5.2
     private static let spriteSheet: NSImage? = {
         guard let url = Bundle.main.url(
             forResource: "ApertureCatSprite",
@@ -1803,6 +1833,8 @@ private final class BubbleView: NSView {
     private var bubbleIsDark = true
     private var animationFrame = 0
     private var animationTimer: Timer?
+    private var idleAnimationTimer: Timer?
+    private var idleAnimationEnabled = false
     private var lastUnreadCount = 0
     private var mouseDownLocation: NSPoint?
     private var windowOriginAtMouseDown: NSPoint?
@@ -1855,6 +1887,7 @@ private final class BubbleView: NSView {
 
     deinit {
         animationTimer?.invalidate()
+        idleAnimationTimer?.invalidate()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1910,12 +1943,26 @@ private final class BubbleView: NSView {
         badge.isHidden = state.unreadCount == 0
         if !state.connected {
             stopFocusAnimation()
+            cancelIdleAnimation()
         } else if shouldAnimate {
             playFocusAnimation()
+        } else {
+            scheduleIdleAnimationIfNeeded()
+        }
+    }
+
+    func setIdleAnimationEnabled(_ enabled: Bool) {
+        idleAnimationEnabled = enabled
+        if enabled {
+            scheduleIdleAnimationIfNeeded()
+        } else {
+            cancelIdleAnimation()
+            stopFocusAnimation()
         }
     }
 
     func playFocusAnimation() {
+        cancelIdleAnimation()
         guard
             window != nil,
             bubbleConnected,
@@ -1925,7 +1972,10 @@ private final class BubbleView: NSView {
         stopFocusAnimation()
         animationFrame = 0
         needsDisplay = true
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
+        let timer = Timer(
+            timeInterval: Self.animationFrameInterval,
+            repeats: true
+        ) { [weak self] timer in
             guard let self else {
                 timer.invalidate()
                 return
@@ -1935,11 +1985,37 @@ private final class BubbleView: NSView {
                 timer.invalidate()
                 self.animationTimer = nil
                 self.animationFrame = 0
+                self.scheduleIdleAnimationIfNeeded()
             }
             self.needsDisplay = true
         }
         animationTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func scheduleIdleAnimationIfNeeded() {
+        guard
+            idleAnimationEnabled,
+            idleAnimationTimer == nil,
+            animationTimer == nil,
+            window != nil,
+            bubbleConnected,
+            Self.spriteSheet != nil,
+            !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        else { return }
+        let delay = TimeInterval.random(in: Self.idleRestDelayRange)
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.idleAnimationTimer = nil
+            self.playFocusAnimation()
+        }
+        idleAnimationTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func cancelIdleAnimation() {
+        idleAnimationTimer?.invalidate()
+        idleAnimationTimer = nil
     }
 
     private func stopFocusAnimation() {
@@ -1977,6 +2053,7 @@ private final class BubbleView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        cancelIdleAnimation()
         stopFocusAnimation()
         mouseDownLocation = NSEvent.mouseLocation
         windowOriginAtMouseDown = window?.frame.origin
@@ -1986,6 +2063,7 @@ private final class BubbleView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil {
+            cancelIdleAnimation()
             stopFocusAnimation()
         }
     }
@@ -2009,6 +2087,8 @@ private final class BubbleView: NSView {
     override func mouseUp(with event: NSEvent) {
         if !didDrag {
             onOpen?()
+        } else {
+            scheduleIdleAnimationIfNeeded()
         }
         mouseDownLocation = nil
         windowOriginAtMouseDown = nil
@@ -2032,6 +2112,8 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private var language: AppLanguage = .cn
     private var customPrompt = ""
     private var focusWorkItem: DispatchWorkItem?
+    private var focusRevision = 0
+    private var pendingFocusRevision: Int?
     private var resizeSaveWorkItem: DispatchWorkItem?
     private var monitorTimer: Timer?
     private var isExpanded = true
@@ -2270,10 +2352,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let available = visible.width - panel.frame.width - gap - 48
         let preferredWidth = max(430, panel.frame.width)
         let width = min(preferredWidth, max(360, available))
-        let height = min(panel.frame.height, 410)
+        let height = panel.frame.height
         return NSRect(
             x: panel.frame.maxX + gap,
-            y: panel.frame.maxY - height,
+            y: panel.frame.minY,
             width: width,
             height: height
         )
@@ -2297,9 +2379,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         settings.setFrame(
             NSRect(
                 x: panel.frame.maxX + gap,
-                y: panel.frame.maxY - targetSize.height,
+                y: panel.frame.minY,
                 width: targetSize.width,
-                height: panel.frame.height
+                height: targetSize.height
             ),
             display: true
         )
@@ -2328,8 +2410,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     let recovered = !self.state.connected
                     self.monitoringEnabled =
                         envelope.monitoring?.enabled ?? self.monitoringEnabled
-                    self.focusLevel =
-                        envelope.focus?.level ?? self.focusLevel
+                    if self.pendingFocusRevision == nil {
+                        self.focusLevel =
+                            envelope.focus?.level ?? self.focusLevel
+                    }
                     let nextLanguage = envelope.language?.value ?? self.language
                     if nextLanguage != self.language {
                         self.language = nextLanguage
@@ -2484,6 +2568,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             panel.orderFrontRegardless()
             return
         }
+        bubbleView.setIdleAnimationEnabled(false)
         isExpanded = true
         let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
         let target = expandedFrame(anchoredAt: topLeft)
@@ -2531,6 +2616,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             self.bubbleView.autoresizingMask = [.width, .height]
             self.expandedView.alphaValue = 1
             self.bubbleView.update(state: self.state)
+            self.bubbleView.setIdleAnimationEnabled(true)
             self.bubbleView.playFocusAnimation()
         })
     }
@@ -2691,29 +2777,38 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
     private func updateFocus(level: Double) {
         focusLevel = min(1, max(0, level))
+        focusRevision += 1
+        let revision = focusRevision
+        pendingFocusRevision = revision
         expandedView.setFocus(level: focusLevel)
         settingsController?.setFocus(level: focusLevel)
         bubbleView.setFocus(level: focusLevel)
         focusWorkItem?.cancel()
+        let value = focusLevel
         let work = DispatchWorkItem { [weak self] in
-            self?.persistFocus()
+            self?.persistFocus(level: value, revision: revision)
         }
         focusWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
     }
 
-    private func persistFocus() {
+    private func persistFocus(level: Double, revision: Int) {
         var request = URLRequest(url: focusURL)
         request.httpMethod = "PATCH"
         request.timeoutInterval = 3
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(
-            withJSONObject: ["level": focusLevel]
+            withJSONObject: ["level": level]
         )
         URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
             guard let self else { return }
-            if (response as? HTTPURLResponse)?.statusCode != 200 {
-                DispatchQueue.main.async { self.refresh() }
+            DispatchQueue.main.async {
+                guard self.pendingFocusRevision == revision else { return }
+                self.pendingFocusRevision = nil
+                self.focusWorkItem = nil
+                if (response as? HTTPURLResponse)?.statusCode != 200 {
+                    self.refresh()
+                }
             }
         }.resume()
     }
@@ -2786,14 +2881,18 @@ private enum DaemonBootstrap {
             if (response as? HTTPURLResponse)?.statusCode == 200,
                health?.ok == true,
                health?.service == "aperture-attention",
-               health?.capabilities?.contains("language-v1") == true {
+               health?.capabilities?.contains("language-v1") == true,
+               health?.capabilities?.contains("public-model-catalog-v1") == true {
                 completion()
                 return
             }
             if health?.service == "aperture-attention" {
                 stopLegacyDaemon()
                 DispatchQueue.global(qos: .utility).asyncAfter(
-                    deadline: .now() + 0.4
+                    // The daemon's SIGTERM fallback is 1.5 seconds. Starting a
+                    // replacement sooner can leave the old process holding
+                    // port 4317 and make the new client talk to the old API.
+                    deadline: .now() + 1.8
                 ) {
                     launch()
                     completion()
@@ -2876,6 +2975,11 @@ private enum DaemonBootstrap {
         do {
             try process.run()
             launchedProcess = process
+            process.terminationHandler = { finishedProcess in
+                if launchedProcess === finishedProcess {
+                    launchedProcess = nil
+                }
+            }
         } catch {
             launchedProcess = nil
         }

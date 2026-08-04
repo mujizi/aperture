@@ -239,6 +239,13 @@ npm run build
 npm run install:mac
 ```
 
+日常开发完成后，使用完整重启命令。它会重新构建、停止所有 Aperture
+窗口和旧后台、等待 4317 端口释放、安装并启动最新版，最后验证健康状态与模型目录：
+
+```bash
+npm run restart:mac
+```
+
 生成 GitHub Release 使用的 `.dmg`、`.zip` 和 SHA-256 校验文件：
 
 ```bash

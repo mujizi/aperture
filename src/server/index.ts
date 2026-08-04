@@ -503,8 +503,8 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "aperture-attention",
-    version: "0.2.1",
-    capabilities: ["language-v1"]
+    version: "0.2.2",
+    capabilities: ["language-v1", "public-model-catalog-v1"]
   });
 });
 
@@ -561,41 +561,49 @@ app.post("/api/config", async (req, res, next) => {
   }
 });
 
-app.post("/api/models", async (req, res, next) => {
+const listOpenRouterModels: express.RequestHandler = async (_req, res, next) => {
   try {
-    const apiKey =
-      typeof req.body?.apiKey === "string" && req.body.apiKey.trim()
-        ? req.body.apiKey.trim()
-        : runtimeOpenRouter.apiKey;
-    if (!apiKey) {
-      res.status(400).json({ error: "Enter an OpenRouter API key first" });
-      return;
-    }
-    const response = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "http://127.0.0.1:4317",
-        "X-Title": "Aperture Attention Layer"
-      },
-      signal: AbortSignal.timeout(15_000)
-    });
-    const payload = (await response.json()) as {
-      data?: Array<{
-        id?: string;
-        name?: string;
-        context_length?: number;
-        architecture?: { output_modalities?: string[] };
-        pricing?: { prompt?: string; completion?: string };
-      }>;
-      error?: { message?: string };
-    };
+    // OpenRouter's public catalog does not require a key. Keeping this request
+    // unauthenticated also lets users choose a model before entering a key and
+    // prevents an expired key from breaking both catalog filters.
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/models?output_modalities=text",
+      {
+        headers: {
+          "HTTP-Referer": "http://127.0.0.1:4317",
+          "X-Title": "Aperture Attention Layer"
+        },
+        signal: AbortSignal.timeout(15_000)
+      }
+    );
+    const rawPayload = await response.text();
+    const payload = (() => {
+      try {
+        return JSON.parse(rawPayload) as {
+          data?: Array<{
+            id?: string;
+            name?: string;
+            context_length?: number;
+            architecture?: { output_modalities?: string[] };
+            pricing?: { prompt?: string; completion?: string };
+          }>;
+          error?: { message?: string };
+        };
+      } catch {
+        return {};
+      }
+    })();
     if (!response.ok) {
       res.status(response.status).json({
         error: payload.error?.message ?? `OpenRouter request failed (${response.status})`
       });
       return;
     }
-    const models = (payload.data ?? [])
+    if (!Array.isArray(payload.data)) {
+      res.status(502).json({ error: "OpenRouter returned an invalid model catalog" });
+      return;
+    }
+    const models = payload.data
       .filter((model) => {
         const outputs = model.architecture?.output_modalities;
         return !outputs || outputs.includes("text");
@@ -615,11 +623,20 @@ app.post("/api/models", async (req, res, next) => {
           : []
       )
       .sort((left, right) => left.name.localeCompare(right.name));
+    res.setHeader("Cache-Control", "private, max-age=300");
     res.json({ models });
   } catch (error) {
-    next(error);
+    next(
+      error instanceof Error && error.name === "TimeoutError"
+        ? new Error("OpenRouter model catalog timed out")
+        : error
+    );
   }
-});
+};
+
+app.get("/api/models", listOpenRouterModels);
+// Retain POST compatibility for previously built companion clients.
+app.post("/api/models", listOpenRouterModels);
 
 app.post("/api/config/test", async (req, res, next) => {
   try {

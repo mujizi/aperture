@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1242" height="1656" viewBox="0 0 1242 1656">
+  <defs><filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-opacity=".14"/></filter></defs>
+  <rect width="1242" height="1656" fill="#edf2ef"/>
+  <text x="72" y="130" fill="#18201d" font-family="PingFang SC, sans-serif" font-size="64" font-weight="800">自动，但边界要说清楚</text>
+  <text x="72" y="215" fill="#56635d" font-family="PingFang SC, sans-serif" font-size="37">本地捕获、历史和渲染都留在 Mac</text>
+  <rect x="72" y="300" width="1098" height="620" rx="44" fill="#fff" filter="url(#shadow)"/>
+  <image href="file:///Users/wangmengna/Desktop/work/Aperture/docs/promotion/aperture-settings.svg.png" x="112" y="340" width="1018" height="540" preserveAspectRatio="xMidYMid meet"/>
+  <rect x="72" y="980" width="1098" height="390" rx="44" fill="#16231e"/>
+  <text x="122" y="1085" fill="#a8bab1" font-family="PingFang SC, sans-serif" font-size="28">发送给配置的 OpenRouter 模型</text>
+  <text x="122" y="1160" fill="#fff" font-family="PingFang SC, sans-serif" font-size="39" font-weight="700">清理后的问题 + 完整最终答案</text>
+  <line x1="122" y1="1215" x2="1120" y2="1215" stroke="#41534b" stroke-width="2"/>
+  <text x="122" y="1300" fill="#a8bab1" font-family="PingFang SC, sans-serif" font-size="28">不会发送</text>
+  <text x="122" y="1360" fill="#fff" font-family="PingFang SC, sans-serif" font-size="36" font-weight="700">原始工具调用与工具输出</text>
+  <text x="72" y="1548" fill="#18201d" font-family="PingFang SC, sans-serif" font-size="30" font-weight="600">隐私不是一句“本地优先”，而是明确数据边界</text>
+</svg>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1242" height="1656" viewBox="0 0 1242 1656">
+  <rect width="1242" height="1656" fill="#fbfaf6"/>
+  <text x="72" y="145" fill="#18201d" font-family="PingFang SC, sans-serif" font-size="68" font-weight="800">问题不是模型不够快</text>
+  <text x="72" y="238" fill="#5c6862" font-family="PingFang SC, sans-serif" font-size="40" font-weight="500">而是人的注意力带宽没有变</text>
+  <rect x="72" y="330" width="1098" height="260" rx="42" fill="#16231e"/>
+  <text x="120" y="420" fill="#b9c8c1" font-family="PingFang SC, sans-serif" font-size="30">大模型输出带宽</text>
+  <rect x="120" y="466" width="930" height="58" rx="29" fill="#72d8a7"/>
+  <text x="1080" y="509" fill="#fff" text-anchor="end" font-family="PingFang SC, sans-serif" font-size="30" font-weight="700">越来越快</text>
+  <rect x="72" y="630" width="1098" height="260" rx="42" fill="#edf1ee" stroke="#d5ded9" stroke-width="3"/>
+  <text x="120" y="720" fill="#4b5852" font-family="PingFang SC, sans-serif" font-size="30">人类输入与判断带宽</text>
+  <rect x="120" y="766" width="340" height="58" rx="29" fill="#93aaa0"/>
+  <text x="1080" y="809" fill="#4b5852" text-anchor="end" font-family="PingFang SC, sans-serif" font-size="30" font-weight="700">仍然只有一双眼睛</text>
+  <path d="M621 935v110" stroke="#16231e" stroke-width="6"/><path d="M594 1020l27 34 27-34" fill="none" stroke="#16231e" stroke-width="6"/>
+  <rect x="72" y="1080" width="1098" height="380" rx="46" fill="#e8f0eb"/>
+  <text x="120" y="1185" fill="#18201d" font-family="PingFang SC, sans-serif" font-size="48" font-weight="800">Aperture 放在两者之间</text>
+  <text x="120" y="1270" fill="#4f5d56" font-family="PingFang SC, sans-serif" font-size="35">
+    <tspan x="120">把完成的任务重排成：</tspan><tspan x="120" dy="68">结果 · 决策 · 阻塞 · 证据</tspan>
+  </text>
+  <text x="72" y="1570" fill="#18201d" font-family="PingFang SC, sans-serif" font-size="28" font-weight="600">02 / 06</text>
+</svg>
