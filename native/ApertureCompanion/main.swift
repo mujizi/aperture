@@ -100,6 +100,7 @@ private struct ModelOption: Decodable {
     let id: String
     let name: String
     let contextLength: Int
+    let isFree: Bool
 }
 
 private struct ModelTestEnvelope: Decodable {
@@ -198,92 +199,95 @@ private final class ActionButton: NSButton {
     }
 }
 
-private final class CompactActionButton: NSButton {
-    var actionHandler: (() -> Void)?
+private final class FocusSliderCell: NSSliderCell {
+    var activeColor = NSColor.systemYellow
+    var inactiveColor = NSColor.separatorColor
+    var knobColor = NSColor.controlBackgroundColor
+    var knobBorderColor = NSColor.separatorColor
 
-    init(title: String, symbol: String) {
-        super.init(frame: .zero)
-        self.title = title
-        image = NSImage(
-            systemSymbolName: symbol,
-            accessibilityDescription: title
+    override func drawBar(inside rect: NSRect, flipped: Bool) {
+        let knobWidth = max(14, knobRect(flipped: flipped).width)
+        let trackRect = NSRect(
+            x: rect.minX + knobWidth / 2,
+            y: rect.midY - 2,
+            width: max(0, rect.width - knobWidth),
+            height: 4
         )
-        imagePosition = .imageLeading
-        isBordered = true
-        bezelStyle = .rounded
-        controlSize = .regular
-        font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
-        focusRingType = .default
-        target = self
-        action = #selector(invoke)
-        setContentHuggingPriority(.required, for: .horizontal)
+        let track = NSBezierPath(roundedRect: trackRect, xRadius: 2, yRadius: 2)
+        inactiveColor.setFill()
+        track.fill()
+
+        let range = maxValue - minValue
+        let progress = range > 0 ? (doubleValue - minValue) / range : 0
+        let fillRect = NSRect(
+            x: trackRect.minX,
+            y: trackRect.minY,
+            width: trackRect.width * CGFloat(min(1, max(0, progress))),
+            height: trackRect.height
+        )
+        guard fillRect.width > 0 else { return }
+        activeColor.setFill()
+        NSBezierPath(roundedRect: fillRect, xRadius: 2, yRadius: 2).fill()
+    }
+
+    override func drawKnob(_ knobRect: NSRect) {
+        let diameter: CGFloat = 16
+        let circleRect = NSRect(
+            x: knobRect.midX - diameter / 2,
+            y: knobRect.midY - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.16)
+        shadow.shadowBlurRadius = 4
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        shadow.set()
+        let circle = NSBezierPath(ovalIn: circleRect)
+        knobColor.setFill()
+        circle.fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        knobBorderColor.setStroke()
+        circle.lineWidth = 0.75
+        circle.stroke()
+    }
+}
+
+private final class FocusSlider: NSSlider {
+    private let minimalCell = FocusSliderCell()
+
+    var activeColor: NSColor {
+        get { minimalCell.activeColor }
+        set { minimalCell.activeColor = newValue; needsDisplay = true }
+    }
+
+    var inactiveColor: NSColor {
+        get { minimalCell.inactiveColor }
+        set { minimalCell.inactiveColor = newValue; needsDisplay = true }
+    }
+
+    var knobColor: NSColor {
+        get { minimalCell.knobColor }
+        set { minimalCell.knobColor = newValue; needsDisplay = true }
+    }
+
+    var knobBorderColor: NSColor {
+        get { minimalCell.knobBorderColor }
+        set { minimalCell.knobBorderColor = newValue; needsDisplay = true }
+    }
+
+    init(value: Double, minValue: Double, maxValue: Double) {
+        super.init(frame: .zero)
+        cell = minimalCell
+        self.minValue = minValue
+        self.maxValue = maxValue
+        doubleValue = value
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    @objc private func invoke() {
-        actionHandler?()
-    }
-}
-
-private final class PromptTextView: NSTextView {
-    var language: AppLanguage = .cn
-    var onSave: (() -> Void)?
-    var onCancel: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        let modifiers = event.modifierFlags.intersection(
-            .deviceIndependentFlagsMask
-        )
-        if modifiers.contains(.command),
-           event.charactersIgnoringModifiers?.lowercased() == "s" {
-            onSave?()
-            return
-        }
-        if modifiers.contains(.command), event.keyCode == 36 {
-            onSave?()
-            return
-        }
-        if event.keyCode == 53 {
-            onCancel?()
-            return
-        }
-        super.keyDown(with: event)
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = NSMenu()
-        if isEditable {
-            menu.addItem(NSMenuItem(
-                title: language.text("剪切", "Cut"),
-                action: #selector(NSText.cut(_:)),
-                keyEquivalent: ""
-            ))
-        }
-        menu.addItem(NSMenuItem(
-            title: language.text("复制", "Copy"),
-            action: #selector(NSText.copy(_:)),
-            keyEquivalent: ""
-        ))
-        if isEditable {
-            menu.addItem(NSMenuItem(
-                title: language.text("粘贴", "Paste"),
-                action: #selector(NSText.paste(_:)),
-                keyEquivalent: ""
-            ))
-        }
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(
-            title: language.text("全选", "Select All"),
-            action: #selector(NSText.selectAll(_:)),
-            keyEquivalent: ""
-        ))
-        for item in menu.items where !item.isSeparatorItem {
-            item.target = self
-        }
-        return menu
     }
 }
 
@@ -514,7 +518,7 @@ private final class ApertureCatMarkView: NSView {
     }
 }
 
-private final class SettingsViewController: NSViewController, NSTextViewDelegate {
+private final class SettingsViewController: NSViewController {
     private let titleLabel = NSTextField(labelWithString: "设置")
     private let languageLabel = NSTextField(labelWithString: "语言")
     private let languageControl = NSSegmentedControl(
@@ -524,13 +528,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         action: nil
     )
     private let focusLabel = NSTextField(labelWithString: "聚焦")
-    private let focusSlider = NSSlider(
-        value: 0.62,
-        minValue: 0,
-        maxValue: 1,
-        target: nil,
-        action: nil
-    )
+    private let focusSlider = FocusSlider(value: 0.62, minValue: 0, maxValue: 1)
     private let appearanceLabel = NSTextField(labelWithString: "外观")
     private let appearanceControl = NSSegmentedControl(
         labels: ["", ""],
@@ -555,6 +553,10 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         symbol: "arrow.clockwise",
         label: "拉取模型列表"
     )
+    private let freeModelsButton = ActionButton(
+        symbol: "gift",
+        label: "只看免费模型"
+    )
     private let testModelButton = ActionButton(
         symbol: "bolt.horizontal.circle",
         label: "测试模型"
@@ -564,31 +566,6 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         label: "保存模型配置"
     )
     private let modelStatus = NSTextField(labelWithString: "")
-    private let promptLabel = NSTextField(labelWithString: "Prompt")
-    private let promptStatus = NSTextField(labelWithString: "")
-    private let promptScroll = NSScrollView(frame: .zero)
-    private let promptEditor = PromptTextView(frame: .zero)
-    private let promptActions = NSStackView(frame: .zero)
-    private let copyPromptButton = CompactActionButton(
-        title: "复制",
-        symbol: "doc.on.doc"
-    )
-    private let editPromptButton = CompactActionButton(
-        title: "编辑",
-        symbol: "pencil"
-    )
-    private let selectAllPromptButton = CompactActionButton(
-        title: "全选",
-        symbol: "selection.pin.in.out"
-    )
-    private let cancelPromptButton = CompactActionButton(
-        title: "取消",
-        symbol: "xmark"
-    )
-    private let savePromptButton = CompactActionButton(
-        title: "保存",
-        symbol: "checkmark"
-    )
     private var sizeChoices: [(Int, String)] {
         language.isEnglish
             ? [(16, "16 · Compact"), (18, "18 · Comfortable"),
@@ -601,13 +578,11 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     private var readerSize: Int
     private var showsKey = false
     private var apiKeyConfigured = false
-    private var isEditingPrompt = false
-    private var promptBeforeEditing = ""
-    private var promptStatusWorkItem: DispatchWorkItem?
+    private var allModels: [ModelOption] = []
+    private var showsFreeModelsOnly = false
     private var focusHandler: ((Double) -> Void)?
     private var themeHandler: ((Bool) -> Void)?
     private var sizeHandler: ((Int) -> Void)?
-    private var promptHandler: ((String) -> Void)?
     private var languageHandler: ((AppLanguage) -> Void)?
 
     init(
@@ -615,24 +590,20 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         isDark: Bool,
         readerSize: Int,
         language: AppLanguage,
-        prompt: String,
         onFocusChanged: @escaping (Double) -> Void,
         onThemeChanged: @escaping (Bool) -> Void,
         onSizeChanged: @escaping (Int) -> Void,
-        onLanguageChanged: @escaping (AppLanguage) -> Void,
-        onPromptChanged: @escaping (String) -> Void
+        onLanguageChanged: @escaping (AppLanguage) -> Void
     ) {
         self.isDark = isDark
         self.readerSize = readerSize
         self.language = language
         super.init(nibName: nil, bundle: nil)
         focusSlider.doubleValue = min(1, max(0, focusLevel))
-        promptEditor.string = prompt
         focusHandler = onFocusChanged
         themeHandler = onThemeChanged
         sizeHandler = onSizeChanged
         languageHandler = onLanguageChanged
-        promptHandler = onPromptChanged
     }
 
     required init?(coder: NSCoder) {
@@ -640,7 +611,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
     }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 430, height: 800))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 430, height: 410))
         root.wantsLayer = true
         root.layer?.cornerRadius = 22
         root.layer?.cornerCurve = .continuous
@@ -658,8 +629,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             sizeLabel,
             providerLabel,
             keyLabel,
-            modelLabel,
-            promptLabel
+            modelLabel
         ]
         for label in labels {
             label.translatesAutoresizingMaskIntoConstraints = false
@@ -674,18 +644,6 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         languageControl.target = self
         languageControl.action = #selector(changeLanguage)
         root.addSubview(languageControl)
-        promptStatus.translatesAutoresizingMaskIntoConstraints = false
-        promptStatus.font = NSFont.monospacedDigitSystemFont(
-            ofSize: 12,
-            weight: .regular
-        )
-        promptStatus.lineBreakMode = .byTruncatingTail
-        promptStatus.setContentCompressionResistancePriority(
-            .defaultLow,
-            for: .horizontal
-        )
-        root.addSubview(promptStatus)
-
         focusSlider.translatesAutoresizingMaskIntoConstraints = false
         focusSlider.controlSize = .regular
         focusSlider.isContinuous = true
@@ -752,11 +710,17 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         modelCombo.placeholderString = "选择或输入模型名称"
         root.addSubview(modelCombo)
 
-        for button in [refreshModelsButton, testModelButton, saveModelButton] {
+        for button in [
+            refreshModelsButton,
+            freeModelsButton,
+            testModelButton,
+            saveModelButton
+        ] {
             button.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(button)
         }
         refreshModelsButton.actionHandler = { [weak self] in self?.fetchModels() }
+        freeModelsButton.actionHandler = { [weak self] in self?.toggleFreeModels() }
         testModelButton.actionHandler = { [weak self] in self?.testModel() }
         saveModelButton.actionHandler = { [weak self] in self?.saveModelConfig() }
 
@@ -765,81 +729,6 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         modelStatus.lineBreakMode = .byWordWrapping
         modelStatus.maximumNumberOfLines = 2
         root.addSubview(modelStatus)
-
-        promptScroll.translatesAutoresizingMaskIntoConstraints = false
-        promptScroll.hasVerticalScroller = true
-        promptScroll.hasHorizontalScroller = false
-        promptScroll.autohidesScrollers = true
-        promptScroll.horizontalScrollElasticity = .none
-        promptScroll.verticalScrollElasticity = .automatic
-        promptScroll.drawsBackground = false
-        promptScroll.borderType = .noBorder
-        promptScroll.wantsLayer = true
-        promptScroll.layer?.cornerRadius = 9
-        promptScroll.layer?.cornerCurve = .continuous
-        root.addSubview(promptScroll)
-
-        promptEditor.isRichText = false
-        promptEditor.importsGraphics = false
-        promptEditor.isAutomaticQuoteSubstitutionEnabled = false
-        promptEditor.isAutomaticDashSubstitutionEnabled = false
-        promptEditor.isAutomaticTextReplacementEnabled = false
-        promptEditor.isEditable = false
-        promptEditor.isSelectable = true
-        promptEditor.isHorizontallyResizable = false
-        promptEditor.isVerticallyResizable = true
-        promptEditor.autoresizingMask = [.width]
-        promptEditor.minSize = NSSize(width: 0, height: 0)
-        promptEditor.maxSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        promptEditor.frame = NSRect(x: 0, y: 0, width: 398, height: 420)
-        promptEditor.textContainer?.containerSize = NSSize(
-            width: 398,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        promptEditor.textContainer?.widthTracksTextView = true
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byCharWrapping
-        promptEditor.defaultParagraphStyle = paragraphStyle
-        updatePromptFont()
-        promptEditor.textContainerInset = NSSize(width: 12, height: 12)
-        promptEditor.delegate = self
-        promptEditor.onSave = { [weak self] in self?.savePrompt() }
-        promptEditor.onCancel = { [weak self] in self?.cancelPromptEditing() }
-        promptScroll.documentView = promptEditor
-        DispatchQueue.main.async { [weak self] in
-            self?.promptEditor.scrollToBeginningOfDocument(nil)
-        }
-
-        promptActions.translatesAutoresizingMaskIntoConstraints = false
-        promptActions.orientation = .horizontal
-        promptActions.alignment = .centerY
-        promptActions.spacing = 6
-        promptActions.detachesHiddenViews = true
-        for button in [
-            copyPromptButton,
-            editPromptButton,
-            selectAllPromptButton,
-            cancelPromptButton,
-            savePromptButton
-        ] {
-            button.translatesAutoresizingMaskIntoConstraints = false
-            promptActions.addArrangedSubview(button)
-        }
-        copyPromptButton.actionHandler = { [weak self] in self?.copyPrompt() }
-        editPromptButton.actionHandler = {
-            [weak self] in self?.beginPromptEditing()
-        }
-        selectAllPromptButton.actionHandler = {
-            [weak self] in self?.selectAllPrompt()
-        }
-        cancelPromptButton.actionHandler = {
-            [weak self] in self?.cancelPromptEditing()
-        }
-        savePromptButton.actionHandler = { [weak self] in self?.savePrompt() }
-        root.addSubview(promptActions)
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
@@ -893,64 +782,32 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             modelCombo.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 94),
             modelCombo.trailingAnchor.constraint(equalTo: refreshModelsButton.leadingAnchor, constant: -7),
             modelCombo.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
-            refreshModelsButton.trailingAnchor.constraint(equalTo: testModelButton.leadingAnchor, constant: -2),
+            refreshModelsButton.trailingAnchor.constraint(equalTo: freeModelsButton.leadingAnchor, constant: -2),
+            freeModelsButton.trailingAnchor.constraint(equalTo: testModelButton.leadingAnchor, constant: -2),
             testModelButton.trailingAnchor.constraint(equalTo: saveModelButton.leadingAnchor, constant: -2),
             saveModelButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
             refreshModelsButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
+            freeModelsButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             testModelButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             saveModelButton.centerYAnchor.constraint(equalTo: modelLabel.centerYAnchor),
             refreshModelsButton.widthAnchor.constraint(equalToConstant: 28),
+            freeModelsButton.widthAnchor.constraint(equalToConstant: 28),
             testModelButton.widthAnchor.constraint(equalToConstant: 28),
             saveModelButton.widthAnchor.constraint(equalToConstant: 28),
             refreshModelsButton.heightAnchor.constraint(equalToConstant: 28),
+            freeModelsButton.heightAnchor.constraint(equalToConstant: 28),
             testModelButton.heightAnchor.constraint(equalToConstant: 28),
             saveModelButton.heightAnchor.constraint(equalToConstant: 28),
 
             modelStatus.topAnchor.constraint(equalTo: modelCombo.bottomAnchor, constant: 9),
             modelStatus.leadingAnchor.constraint(equalTo: modelCombo.leadingAnchor),
             modelStatus.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-
-            promptLabel.topAnchor.constraint(equalTo: modelStatus.bottomAnchor, constant: 22),
-            promptLabel.leadingAnchor.constraint(equalTo: focusLabel.leadingAnchor),
-            promptStatus.leadingAnchor.constraint(equalTo: promptLabel.trailingAnchor, constant: 8),
-            promptStatus.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
-            promptStatus.centerYAnchor.constraint(equalTo: promptLabel.centerYAnchor),
-
-            promptActions.topAnchor.constraint(equalTo: promptLabel.bottomAnchor, constant: 10),
-            promptActions.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            promptActions.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
-
-            promptScroll.topAnchor.constraint(equalTo: promptActions.bottomAnchor, constant: 12),
-            promptScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            promptScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            promptScroll.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20)
+            modelStatus.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -20)
         ])
 
         applyTheme()
         applyLanguage()
-        setPromptEditing(false)
         loadModelConfig()
-    }
-
-    override func viewDidLayout() {
-        super.viewDidLayout()
-        let availableWidth = promptScroll.contentSize.width
-        guard availableWidth > 0 else { return }
-        promptEditor.minSize.width = availableWidth
-        promptEditor.maxSize.width = availableWidth
-        var editorFrame = promptEditor.frame
-        editorFrame.size.width = availableWidth
-        promptEditor.frame = editorFrame
-        promptEditor.textContainer?.containerSize = NSSize(
-            width: availableWidth,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        if promptScroll.contentView.bounds.origin.x != 0 {
-            promptScroll.contentView.scroll(
-                to: NSPoint(x: 0, y: promptScroll.contentView.bounds.origin.y)
-            )
-            promptScroll.reflectScrolledClipView(promptScroll.contentView)
-        }
     }
 
     func setFocus(level: Double) {
@@ -964,7 +821,6 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
 
     func setReaderSize(_ value: Int) {
         readerSize = value
-        updatePromptFont()
         if let index = sizeChoices.firstIndex(where: { $0.0 == value }) {
             sizePopup.selectItem(at: index)
         }
@@ -975,23 +831,6 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         language = value
         languageControl.selectedSegment = value == .en ? 1 : 0
         applyLanguage()
-    }
-
-    private func updatePromptFont() {
-        promptEditor.font = NSFont.systemFont(
-            ofSize: max(15, CGFloat(readerSize - 2)),
-            weight: .regular
-        )
-    }
-
-    func setPrompt(_ value: String) {
-        guard !isEditingPrompt, promptEditor.string != value else { return }
-        promptEditor.string = value
-        updatePromptStatus()
-    }
-
-    func textDidChange(_ notification: Notification) {
-        updatePromptStatus()
     }
 
     @objc private func changeFocus() {
@@ -1094,21 +933,78 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
                 return
             }
             DispatchQueue.main.async {
-                let selected = self.modelCombo.stringValue
-                self.modelCombo.removeAllItems()
-                self.modelCombo.addItems(
-                    withObjectValues: payload.models.map(\.id)
-                )
-                self.modelCombo.stringValue = selected
-                self.setModelStatus(
-                    self.language.text(
-                        "已载入 \(payload.models.count) 个模型",
-                        "Loaded \(payload.models.count) models"
-                    ),
-                    success: true
-                )
+                self.allModels = payload.models
+                self.applyModelFilter()
             }
         }
+    }
+
+    private func toggleFreeModels() {
+        showsFreeModelsOnly.toggle()
+        updateFreeModelsButton()
+        if allModels.isEmpty {
+            fetchModels()
+            return
+        }
+        applyModelFilter()
+    }
+
+    private func applyModelFilter() {
+        let selected = modelCombo.stringValue
+        let models = showsFreeModelsOnly
+            ? allModels.filter(\.isFree)
+            : allModels
+        modelCombo.removeAllItems()
+        modelCombo.addItems(withObjectValues: models.map(\.id))
+        modelCombo.stringValue = selected
+
+        if showsFreeModelsOnly {
+            setModelStatus(
+                language.text(
+                    "免费模型 \(models.count) 个 · 共 \(allModels.count) 个",
+                    "\(models.count) free · \(allModels.count) total"
+                ),
+                success: true
+            )
+        } else {
+            setModelStatus(
+                language.text(
+                    "已载入 \(allModels.count) 个模型",
+                    "Loaded \(allModels.count) models"
+                ),
+                success: true
+            )
+        }
+    }
+
+    private func updateFreeModelsButton() {
+        let label = showsFreeModelsOnly
+            ? language.text("显示所有模型", "Show all models")
+            : language.text("只看免费模型", "Show free models only")
+        freeModelsButton.toolTip = label
+        freeModelsButton.image = NSImage(
+            systemSymbolName: showsFreeModelsOnly ? "gift.fill" : "gift",
+            accessibilityDescription: label
+        )
+        freeModelsButton.setAccessibilityLabel(label)
+        freeModelsButton.setAccessibilityValue(
+            language.text(
+                showsFreeModelsOnly ? "已开启" : "已关闭",
+                showsFreeModelsOnly ? "On" : "Off"
+            )
+        )
+        let accent = isDark
+            ? NSColor(calibratedRed: 0.92, green: 0.70, blue: 0.29, alpha: 1)
+            : NSColor(calibratedRed: 0.65, green: 0.43, blue: 0.04, alpha: 1)
+        freeModelsButton.contentTintColor = showsFreeModelsOnly
+            ? accent
+            : (isDark
+                ? NSColor(calibratedWhite: 0.72, alpha: 1)
+                : NSColor(calibratedWhite: 0.36, alpha: 1))
+        freeModelsButton.layer?.cornerRadius = 7
+        freeModelsButton.layer?.backgroundColor = showsFreeModelsOnly
+            ? accent.withAlphaComponent(0.12).cgColor
+            : NSColor.clear.cgColor
     }
 
     private func testModel() {
@@ -1227,103 +1123,12 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
         }()
     }
 
-    private func beginPromptEditing() {
-        guard !isEditingPrompt else { return }
-        promptBeforeEditing = promptEditor.string
-        let visibleOrigin = promptScroll.contentView.bounds.origin
-        setPromptEditing(true)
-        view.window?.makeFirstResponder(promptEditor)
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.promptScroll.contentView.scroll(to: visibleOrigin)
-            self.promptScroll.reflectScrolledClipView(self.promptScroll.contentView)
-        }
-    }
-
-    private func savePrompt() {
-        guard isEditingPrompt, promptEditor.string.count <= 4000 else { return }
-        let value = promptEditor.string.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        promptEditor.string = value
-        promptBeforeEditing = value
-        promptHandler?(value)
-        setPromptEditing(false)
-        showPromptStatus(language.text("已保存", "Saved"))
-    }
-
-    private func cancelPromptEditing() {
-        guard isEditingPrompt else { return }
-        promptEditor.string = promptBeforeEditing
-        setPromptEditing(false)
-        showPromptStatus(language.text("已取消", "Cancelled"))
-    }
-
-    private func copyPrompt() {
-        let selectedRange = promptEditor.selectedRange()
-        let source = promptEditor.string as NSString
-        let value = selectedRange.length > 0
-            ? source.substring(with: selectedRange)
-            : promptEditor.string
-        guard !value.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
-        showPromptStatus(language.text("已复制", "Copied"))
-    }
-
-    private func selectAllPrompt() {
-        view.window?.makeFirstResponder(promptEditor)
-        promptEditor.selectAll(nil)
-    }
-
-    private func setPromptEditing(_ editing: Bool) {
-        isEditingPrompt = editing
-        promptEditor.isEditable = editing
-        copyPromptButton.isHidden = false
-        editPromptButton.isHidden = editing
-        selectAllPromptButton.isHidden = !editing
-        cancelPromptButton.isHidden = !editing
-        savePromptButton.isHidden = !editing
-        if !editing {
-            view.window?.makeFirstResponder(nil)
-        }
-        updatePromptStatus()
-        applyTheme()
-    }
-
-    private func updatePromptStatus() {
-        promptStatusWorkItem?.cancel()
-        let count = promptEditor.string.count
-        if isEditingPrompt {
-            promptStatus.stringValue = count > 4000
-                ? language.text("超出 \(count - 4000) 字", "\(count - 4000) over limit")
-                : "\(count) / 4000"
-            savePromptButton.isEnabled = count <= 4000
-        } else {
-            promptStatus.stringValue = language.text("\(count) 字", "\(count) characters")
-            savePromptButton.isEnabled = true
-        }
-    }
-
-    private func showPromptStatus(_ value: String) {
-        promptStatusWorkItem?.cancel()
-        promptStatus.stringValue = value
-        let work = DispatchWorkItem { [weak self] in
-            self?.updatePromptStatus()
-        }
-        promptStatusWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
-    }
-
     private func applyTheme() {
         view.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
         appearanceControl.selectedSegment = isDark ? 1 : 0
         let text = isDark
             ? NSColor(calibratedWhite: 0.90, alpha: 1)
             : NSColor(calibratedWhite: 0.18, alpha: 1)
-        let editorBackground = isDark
-            ? NSColor(calibratedWhite: 0.10, alpha: 0.96)
-            : NSColor(calibratedWhite: 0.96, alpha: 0.98)
         view.layer?.backgroundColor = (
             isDark
                 ? NSColor(
@@ -1342,47 +1147,35 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             sizeLabel,
             providerLabel,
             keyLabel,
-            modelLabel,
-            promptLabel
+            modelLabel
         ] {
             label.textColor = text
         }
-        focusSlider.trackFillColor = isDark
+        focusSlider.activeColor = isDark
             ? NSColor(calibratedRed: 0.92, green: 0.70, blue: 0.29, alpha: 1)
             : NSColor(calibratedRed: 0.65, green: 0.43, blue: 0.04, alpha: 1)
-        promptScroll.layer?.backgroundColor = editorBackground.cgColor
-        promptScroll.layer?.borderWidth = isEditingPrompt ? 1 : 0
-        promptScroll.layer?.borderColor = (
-            isDark
-                ? NSColor(calibratedRed: 0.92, green: 0.70, blue: 0.29, alpha: 0.72)
-                : NSColor(calibratedRed: 0.65, green: 0.43, blue: 0.04, alpha: 0.62)
-        ).cgColor
-        promptEditor.backgroundColor = editorBackground
-        promptEditor.textColor = isEditingPrompt
-            ? text
-            : (isDark
-                ? NSColor(calibratedWhite: 0.72, alpha: 1)
-                : NSColor(calibratedWhite: 0.30, alpha: 1))
-        promptEditor.insertionPointColor = text
-        promptStatus.textColor = isDark
-            ? NSColor(calibratedWhite: 0.54, alpha: 1)
-            : NSColor(calibratedWhite: 0.47, alpha: 1)
+        focusSlider.inactiveColor = isDark
+            ? NSColor(calibratedWhite: 0.31, alpha: 0.58)
+            : NSColor(calibratedWhite: 0.82, alpha: 1)
+        focusSlider.knobColor = isDark
+            ? NSColor(calibratedWhite: 0.94, alpha: 1)
+            : NSColor.white
+        focusSlider.knobBorderColor = isDark
+            ? NSColor(calibratedWhite: 0.06, alpha: 0.44)
+            : NSColor(calibratedWhite: 0.68, alpha: 0.72)
         let tint = isDark
             ? NSColor(calibratedWhite: 0.72, alpha: 1)
             : NSColor(calibratedWhite: 0.36, alpha: 1)
         for button in [
             keyVisibilityButton,
             refreshModelsButton,
+            freeModelsButton,
             testModelButton,
-            saveModelButton,
-            copyPromptButton,
-            editPromptButton,
-            selectAllPromptButton,
-            cancelPromptButton,
-            savePromptButton
+            saveModelButton
         ] {
             button.contentTintColor = tint
         }
+        updateFreeModelsButton()
         if !modelStatus.stringValue.isEmpty {
             setModelStatus(modelStatus.stringValue, success: nil)
         }
@@ -1426,6 +1219,7 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             systemSymbolName: "arrow.clockwise",
             accessibilityDescription: refreshLabel
         )
+        updateFreeModelsButton()
         let testLabel = language.text("测试模型", "Test model")
         testModelButton.toolTip = testLabel
         testModelButton.image = NSImage(
@@ -1438,41 +1232,18 @@ private final class SettingsViewController: NSViewController, NSTextViewDelegate
             systemSymbolName: "checkmark",
             accessibilityDescription: saveModelLabel
         )
-        copyPromptButton.title = language.text("复制", "Copy")
-        copyPromptButton.image = NSImage(
-            systemSymbolName: "doc.on.doc",
-            accessibilityDescription: copyPromptButton.title
-        )
-        editPromptButton.title = language.text("编辑", "Edit")
-        editPromptButton.image = NSImage(
-            systemSymbolName: "pencil",
-            accessibilityDescription: editPromptButton.title
-        )
-        selectAllPromptButton.title = language.text("全选", "Select all")
-        selectAllPromptButton.image = NSImage(
-            systemSymbolName: "selection.pin.in.out",
-            accessibilityDescription: selectAllPromptButton.title
-        )
-        cancelPromptButton.title = language.text("取消", "Cancel")
-        cancelPromptButton.image = NSImage(
-            systemSymbolName: "xmark",
-            accessibilityDescription: cancelPromptButton.title
-        )
-        savePromptButton.title = language.text("保存", "Save")
-        savePromptButton.image = NSImage(
-            systemSymbolName: "checkmark",
-            accessibilityDescription: savePromptButton.title
-        )
         modelCombo.placeholderString = language.text("选择或输入模型名称", "Select or enter a model")
-        modelStatus.stringValue = ""
-        promptEditor.language = language
         sizePopup.removeAllItems()
         sizePopup.addItems(withTitles: sizeChoices.map { $0.1 })
         if let index = sizeChoices.firstIndex(where: { $0.0 == readerSize }) {
             sizePopup.selectItem(at: index)
         }
         updateKeyPlaceholder()
-        updatePromptStatus()
+        if allModels.isEmpty {
+            modelStatus.stringValue = ""
+        } else {
+            applyModelFilter()
+        }
     }
 }
 
@@ -2444,7 +2215,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             isDark: isDark,
             readerSize: readerSize,
             language: language,
-            prompt: customPrompt,
             onFocusChanged: { [weak self] level in
                 self?.updateFocus(level: level)
             },
@@ -2456,9 +2226,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             },
             onLanguageChanged: { [weak self] value in
                 self?.updateLanguage(value)
-            },
-            onPromptChanged: { [weak self] value in
-                self?.updatePrompt(value)
             }
         )
         let settings = FloatingPanel(
@@ -2503,11 +2270,12 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let available = visible.width - panel.frame.width - gap - 48
         let preferredWidth = max(430, panel.frame.width)
         let width = min(preferredWidth, max(360, available))
+        let height = min(panel.frame.height, 410)
         return NSRect(
             x: panel.frame.maxX + gap,
-            y: panel.frame.minY,
+            y: panel.frame.maxY - height,
             width: width,
-            height: panel.frame.height
+            height: height
         )
     }
 
@@ -2518,7 +2286,8 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
         let visible = currentScreen().visibleFrame
         let gap: CGFloat = 10
-        let targetSize = settingsFrame().size
+        let targetFrame = settingsFrame()
+        let targetSize = targetFrame.size
         let requiredWidth = panel.frame.width + gap + targetSize.width
         let maximumX = visible.maxX - 16
         if panel.frame.maxX + gap + targetSize.width > maximumX {
@@ -2528,7 +2297,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         settings.setFrame(
             NSRect(
                 x: panel.frame.maxX + gap,
-                y: panel.frame.minY,
+                y: panel.frame.maxY - targetSize.height,
                 width: targetSize.width,
                 height: panel.frame.height
             ),
@@ -2587,7 +2356,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                         )
                     }
                     self.settingsController?.setFocus(level: self.focusLevel)
-                    self.settingsController?.setPrompt(self.customPrompt)
                     self.bubbleView.setFocus(level: self.focusLevel)
                     self.apply(next)
                     if recovered {
@@ -2899,7 +2667,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                 self.expandedView.setPrompt(self.customPrompt)
                 self.bubbleView.setLanguage(self.language)
                 self.settingsController?.setLanguage(self.language)
-                self.settingsController?.setPrompt(self.customPrompt)
             }
         }.resume()
     }
@@ -2907,7 +2674,6 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private func updatePrompt(_ value: String) {
         customPrompt = String(value.prefix(4000))
         expandedView.setPrompt(customPrompt)
-        settingsController?.setPrompt(customPrompt)
         var request = URLRequest(url: promptURL)
         request.httpMethod = "PATCH"
         request.timeoutInterval = 3

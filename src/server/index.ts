@@ -585,6 +585,7 @@ app.post("/api/models", async (req, res, next) => {
         name?: string;
         context_length?: number;
         architecture?: { output_modalities?: string[] };
+        pricing?: { prompt?: string; completion?: string };
       }>;
       error?: { message?: string };
     };
@@ -604,7 +605,12 @@ app.post("/api/models", async (req, res, next) => {
           ? [{
               id: model.id,
               name: model.name || model.id,
-              contextLength: Number(model.context_length ?? 0)
+              contextLength: Number(model.context_length ?? 0),
+              isFree:
+                model.id === "openrouter/free" ||
+                model.id.endsWith(":free") ||
+                (Number(model.pricing?.prompt) === 0 &&
+                  Number(model.pricing?.completion) === 0)
             }]
           : []
       )
