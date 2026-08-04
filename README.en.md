@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/aperture-cat.png" width="160" alt="Aperture pixel-cat hero image">
+  <img src="docs/design/aperture-cat/aperture-cat-final-64-transparent.png" width="160" alt="Aperture pixel-cat hero image">
 </p>
 
 <h1 align="center">Aperture</h1>
