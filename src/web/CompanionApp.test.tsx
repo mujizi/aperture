@@ -73,12 +73,14 @@ describe("reviewProjectName", () => {
       displayedReviewMessage({
         ...review,
         id: "older-review",
-        projectName: "Aperture"
+        projectName: "Aperture",
+        projectPath: "/Users/example/Aperture"
       })
     ).toEqual({
       type: "displayedReview",
       reviewId: "older-review",
-      projectName: "Aperture"
+      projectName: "Aperture",
+      projectPath: "/Users/example/Aperture"
     });
   });
 });

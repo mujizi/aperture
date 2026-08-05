@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ReviewSnapshot } from "../core/types";
 import {
   adjacentHistoryOffset,
+  filterReviewHistory,
   mergeReviewHistory,
-  newestUnreadHistoryOffset
+  newestUnreadHistoryOffset,
+  reviewProjectCatalog,
+  reviewProjectKey
 } from "./review-history";
 
 function review(
@@ -86,5 +89,43 @@ describe("review history", () => {
     expect(initialOffset).toBe(1);
     unread.delete(reviews[2].id);
     expect(adjacentHistoryOffset(reviews, initialOffset, "older", unread)).toBe(3);
+  });
+
+  it("filters history by stable project path and builds recent project counts", () => {
+    const apertureOne = {
+      ...review("aperture-1", "turn-1", "2026-08-01T07:00:00.000Z"),
+      projectName: "Aperture",
+      projectPath: "/Users/example/Aperture"
+    };
+    const other = {
+      ...review("other", "turn-2", "2026-08-01T08:00:00.000Z"),
+      projectName: "Other",
+      projectPath: "/Users/example/Other"
+    };
+    const apertureTwo = {
+      ...review("aperture-2", "turn-3", "2026-08-01T09:00:00.000Z"),
+      projectName: "Aperture",
+      projectPath: "/Users/example/Aperture"
+    };
+    const reviews = [apertureOne, other, apertureTwo];
+    const unread = new Set([apertureOne.id, other.id, apertureTwo.id]);
+
+    expect(reviewProjectKey(apertureOne)).toBe("/Users/example/Aperture");
+    expect(filterReviewHistory(reviews, "/Users/example/Aperture"))
+      .toEqual([apertureOne, apertureTwo]);
+    expect(reviewProjectCatalog(reviews, unread)).toEqual([
+      {
+        key: "/Users/example/Aperture",
+        name: "Aperture",
+        path: "/Users/example/Aperture",
+        unreadCount: 2
+      },
+      {
+        key: "/Users/example/Other",
+        name: "Other",
+        path: "/Users/example/Other",
+        unreadCount: 1
+      }
+    ]);
   });
 });

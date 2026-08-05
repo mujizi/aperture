@@ -1,6 +1,7 @@
 import { Check, Copy, X } from "lucide-react";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -11,13 +12,17 @@ import { AttentionMarkdown } from "./AttentionMarkdown";
 import { getCurrentReview, getReviews } from "./api";
 import {
   adjacentHistoryOffset,
+  filterReviewHistory,
   mergeReviewHistory,
-  newestUnreadHistoryOffset
+  newestUnreadHistoryOffset,
+  reviewProjectCatalog,
+  reviewProjectKey
 } from "./review-history";
 import { ui } from "./i18n";
 
 declare global {
   interface Window {
+    __APERTURE_PROJECT_FILTER__?: string | null;
     webkit?: {
       messageHandlers?: {
         aperture?: {
@@ -87,7 +92,8 @@ function notifyNative(review: ReviewSnapshot | null, connected: boolean) {
     type: "review",
     connected,
     reviewId: review?.id ?? null,
-    projectName: review ? reviewProjectName(review) : null
+    projectName: review ? reviewProjectName(review) : null,
+    projectPath: review?.projectPath ?? null
   });
 }
 
@@ -95,7 +101,8 @@ export function displayedReviewMessage(review: ReviewSnapshot | null) {
   return {
     type: "displayedReview",
     reviewId: review?.id ?? null,
-    projectName: review ? reviewProjectName(review) : null
+    projectName: review ? reviewProjectName(review) : null,
+    projectPath: review?.projectPath ?? null
   };
 }
 
@@ -132,18 +139,27 @@ export function CompanionApp() {
     () => new Set()
   );
   const [historyOffset, setHistoryOffset] = useState(0);
+  const [projectFilterKey, setProjectFilterKey] = useState<string | null>(
+    () => window.__APERTURE_PROJECT_FILTER__ ?? null
+  );
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const shellRef = useRef<HTMLElement | null>(null);
   const reviewRef = useRef<HTMLElement | null>(null);
   const processingStartedAt = useRef(0);
+  const projectFilterRef = useRef(projectFilterKey);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionAtCopyClick = useRef<string | null>(null);
+  const filteredReviewHistory = useMemo(
+    () => filterReviewHistory(reviewHistory, projectFilterKey),
+    [projectFilterKey, reviewHistory]
+  );
   const review =
-    reviewHistory[reviewHistory.length - 1 - historyOffset] ?? null;
+    filteredReviewHistory[filteredReviewHistory.length - 1 - historyOffset] ?? null;
 
   const beginProcessing = () => {
+    if (projectFilterRef.current) return;
     if (completionTimer.current) clearTimeout(completionTimer.current);
     processingStartedAt.current = Date.now();
     setPhase("processing");
@@ -160,10 +176,21 @@ export function CompanionApp() {
     completionTimer.current = setTimeout(() => {
       setReviewHistory((current) => {
         const merged = mergeReviewHistory(current, [next]);
-        notifyNative(merged.at(-1) ?? null, true);
+        if (
+          !projectFilterRef.current ||
+          reviewProjectKey(next) === projectFilterRef.current
+        ) {
+          notifyNative(next, true);
+        }
         return merged;
       });
-      setHistoryOffset(0);
+      setUnreadReviewIds((current) => new Set(current).add(next.id));
+      if (
+        !projectFilterRef.current ||
+        reviewProjectKey(next) === projectFilterRef.current
+      ) {
+        setHistoryOffset(0);
+      }
       setPhase("complete");
       setError(null);
       window.webkit?.messageHandlers?.aperture?.postMessage({
@@ -187,6 +214,40 @@ export function CompanionApp() {
   };
 
   useEffect(() => {
+    projectFilterRef.current = projectFilterKey;
+  }, [projectFilterKey]);
+
+  useEffect(() => {
+    const projectFilterChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string | null }>).detail;
+      setProjectFilterKey(detail?.key || null);
+    };
+    window.addEventListener("apertureProjectFilter", projectFilterChanged);
+    return () => {
+      window.removeEventListener("apertureProjectFilter", projectFilterChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    setHistoryOffset(
+      newestUnreadHistoryOffset(filteredReviewHistory, unreadReviewIds)
+    );
+    shellRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    // Only a scope change should reposition history. Marking the displayed
+    // review seen must not automatically consume the next unread page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectFilterKey]);
+
+  useEffect(() => {
+    window.webkit?.messageHandlers?.aperture?.postMessage({
+      type: "projectCatalog",
+      selectedProjectKey: projectFilterKey,
+      unreadCount: unreadReviewIds.size,
+      projects: reviewProjectCatalog(reviewHistory, unreadReviewIds)
+    });
+  }, [projectFilterKey, reviewHistory, unreadReviewIds]);
+
+  useEffect(() => {
     void Promise.all([getCurrentReview(), getReviews()])
       .then(([{ review: current, monitoring: currentMonitoring, focus, language: currentLanguage }, history]) => {
         const reviews = mergeReviewHistory(
@@ -201,13 +262,18 @@ export function CompanionApp() {
           history.inbox?.unreadReviewIds ?? []
         );
         setUnreadReviewIds(initialUnreadReviewIds);
-        setHistoryOffset(
-          newestUnreadHistoryOffset(reviews, initialUnreadReviewIds)
+        const initiallyFiltered = filterReviewHistory(
+          reviews,
+          projectFilterRef.current
         );
+        setHistoryOffset(newestUnreadHistoryOffset(
+          initiallyFiltered,
+          initialUnreadReviewIds
+        ));
         setPhase(
           currentMonitoring.enabled && reviews.length ? "complete" : "waiting"
         );
-        notifyNative(reviews.at(-1) ?? null, true);
+        notifyNative(initiallyFiltered.at(-1) ?? null, true);
       })
       .catch((loadError) => {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -328,11 +394,14 @@ export function CompanionApp() {
         return;
       }
 
-      if (event.key === "ArrowLeft" && historyOffset < reviewHistory.length - 1) {
+      if (
+        event.key === "ArrowLeft" &&
+        historyOffset < filteredReviewHistory.length - 1
+      ) {
         event.preventDefault();
         setHistoryOffset((current) =>
           adjacentHistoryOffset(
-            reviewHistory,
+            filteredReviewHistory,
             current,
             "older",
             unreadReviewIds
@@ -344,7 +413,7 @@ export function CompanionApp() {
         event.preventDefault();
         setHistoryOffset((current) =>
           adjacentHistoryOffset(
-            reviewHistory,
+            filteredReviewHistory,
             current,
             "newer",
             unreadReviewIds
@@ -356,7 +425,7 @@ export function CompanionApp() {
 
     window.addEventListener("keydown", turnPage);
     return () => window.removeEventListener("keydown", turnPage);
-  }, [historyOffset, reviewHistory, unreadReviewIds]);
+  }, [filteredReviewHistory, historyOffset, unreadReviewIds]);
 
   return (
     <main className="minimal-shell" ref={shellRef}>

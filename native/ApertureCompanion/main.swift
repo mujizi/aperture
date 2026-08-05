@@ -125,6 +125,13 @@ private struct AttentionState {
     let connected: Bool
 }
 
+private struct ProjectFilterOption {
+    let key: String?
+    let name: String
+    let path: String?
+    let unreadCount: Int
+}
+
 private final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -196,6 +203,227 @@ private final class ActionButton: NSButton {
 
     @objc private func invoke() {
         actionHandler?()
+    }
+}
+
+private final class ProjectFilterButton: NSButton {
+    var actionHandler: (() -> Void)?
+
+    init() {
+        super.init(frame: .zero)
+        title = ""
+        image = NSImage(
+            systemSymbolName: "chevron.down",
+            accessibilityDescription: "筛选项目"
+        )
+        imagePosition = .imageTrailing
+        imageHugsTitle = true
+        isBordered = false
+        bezelStyle = .regularSquare
+        alignment = .left
+        focusRingType = .none
+        font = NSFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
+        setButtonType(.momentaryChange)
+        cell?.lineBreakMode = .byTruncatingTail
+        target = self
+        action = #selector(invoke)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func invoke() {
+        actionHandler?()
+    }
+}
+
+private final class ProjectPickerRowView: NSView {
+    private let check = NSTextField(labelWithString: "✓")
+    private let name = NSTextField(labelWithString: "")
+    private let count = NSTextField(labelWithString: "")
+    private let button = NSButton(frame: .zero)
+    var actionHandler: (() -> Void)?
+
+    init(option: ProjectFilterOption, selected: Bool) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.backgroundColor = selected
+            ? NSColor.controlAccentColor.withAlphaComponent(0.10).cgColor
+            : NSColor.clear.cgColor
+
+        check.translatesAutoresizingMaskIntoConstraints = false
+        check.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        check.textColor = .controlAccentColor
+        check.stringValue = selected ? "✓" : ""
+        addSubview(check)
+
+        name.translatesAutoresizingMaskIntoConstraints = false
+        name.font = NSFont.systemFont(ofSize: 13, weight: selected ? .medium : .regular)
+        name.lineBreakMode = .byTruncatingTail
+        name.toolTip = option.path ?? option.name
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addSubview(name)
+        name.stringValue = option.name
+
+        count.translatesAutoresizingMaskIntoConstraints = false
+        count.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        count.alignment = .right
+        count.textColor = NSColor(
+            calibratedRed: 0.28,
+            green: 0.72,
+            blue: 0.49,
+            alpha: 1
+        )
+        count.stringValue = option.unreadCount == 0
+            ? ""
+            : String(option.unreadCount)
+        count.setContentHuggingPriority(.required, for: .horizontal)
+        addSubview(count)
+
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.title = ""
+        button.isBordered = false
+        button.setButtonType(.momentaryChange)
+        button.target = self
+        button.action = #selector(selectRow)
+        button.toolTip = option.path ?? option.name
+        addSubview(button)
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 34),
+            check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            check.centerYAnchor.constraint(equalTo: centerYAnchor),
+            check.widthAnchor.constraint(equalToConstant: 14),
+            name.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 5),
+            name.centerYAnchor.constraint(equalTo: centerYAnchor),
+            count.leadingAnchor.constraint(greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+            count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            count.centerYAnchor.constraint(equalTo: centerYAnchor),
+            button.leadingAnchor.constraint(equalTo: leadingAnchor),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor),
+            button.topAnchor.constraint(equalTo: topAnchor),
+            button.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func selectRow() {
+        actionHandler?()
+    }
+}
+
+private final class ProjectPickerViewController: NSViewController, NSSearchFieldDelegate {
+    private let language: AppLanguage
+    private let options: [ProjectFilterOption]
+    private let selectedKey: String?
+    private let searchField = NSSearchField(frame: .zero)
+    private let rows = NSStackView(frame: .zero)
+    private let scrollView = NSScrollView(frame: .zero)
+    private let onSelect: (String?) -> Void
+
+    init(
+        language: AppLanguage,
+        options: [ProjectFilterOption],
+        selectedKey: String?,
+        onSelect: @escaping (String?) -> Void
+    ) {
+        self.language = language
+        self.options = options
+        self.selectedKey = selectedKey
+        self.onSelect = onSelect
+        super.init(nibName: nil, bundle: nil)
+        preferredContentSize = NSSize(width: 258, height: 310)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        let root = NSVisualEffectView(frame: NSRect(origin: .zero, size: preferredContentSize))
+        root.material = .popover
+        root.blendingMode = .behindWindow
+        root.state = .active
+        view = root
+
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.placeholderString = language.text("搜索项目…", "Search projects…")
+        searchField.sendsSearchStringImmediately = true
+        searchField.delegate = self
+        root.addSubview(searchField)
+
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        rows.orientation = .vertical
+        rows.alignment = .width
+        rows.spacing = 2
+
+        let document = NSView(frame: .zero)
+        document.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(rows)
+        NSLayoutConstraint.activate([
+            rows.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+            rows.topAnchor.constraint(equalTo: document.topAnchor),
+            rows.bottomAnchor.constraint(equalTo: document.bottomAnchor)
+        ])
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.documentView = document
+        root.addSubview(scrollView)
+
+        NSLayoutConstraint.activate([
+            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
+            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            searchField.heightAnchor.constraint(equalToConstant: 28),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
+            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -9),
+            document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
+        ])
+        rebuildRows(query: "")
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        rebuildRows(query: searchField.stringValue)
+    }
+
+    private func rebuildRows(query: String) {
+        rows.arrangedSubviews.forEach {
+            rows.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedLowercase
+        let filtered = options.filter { option in
+            needle.isEmpty ||
+                option.name.localizedLowercase.contains(needle) ||
+                (option.path?.localizedLowercase.contains(needle) ?? false)
+        }
+        for option in filtered {
+            let row = ProjectPickerRowView(
+                option: option,
+                selected: option.key == selectedKey
+            )
+            row.actionHandler = { [weak self] in
+                self?.onSelect(option.key)
+            }
+            rows.addArrangedSubview(row)
+        }
     }
 }
 
@@ -1396,7 +1624,7 @@ private final class ResizeHandleView: NSView {
 private final class ExpandedContainerView: NSVisualEffectView {
     private let mark = ApertureCatMarkView(frame: .zero)
     private let badge = NSTextField(labelWithString: "0")
-    private let projectLabel = NSTextField(labelWithString: "")
+    private let projectButton = ProjectFilterButton()
     private let header = DragHeaderView(frame: .zero)
     private let separator = NSView(frame: .zero)
     private let monitoringSwitch = NSSwitch(frame: .zero)
@@ -1413,6 +1641,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
     private var sizeHandler: ((Int) -> Void)?
     private var promptHandler: ((String) -> Void)?
     private var settingsToggleHandler: (() -> Void)?
+    private var projectFilterHandler: ((NSView) -> Void)?
     private var currentFocus = 0.62
     private var currentIsDark: Bool
     private var currentReaderSize: Int
@@ -1429,6 +1658,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
         onSizeChanged: @escaping (Int) -> Void,
         onPromptChanged: @escaping (String) -> Void,
         onToggleSettings: @escaping () -> Void,
+        onShowProjectFilter: @escaping (NSView) -> Void,
         onCollapse: @escaping () -> Void
     ) {
         currentIsDark = isDark
@@ -1460,15 +1690,16 @@ private final class ExpandedContainerView: NSVisualEffectView {
         badge.setAccessibilityLabel("未读结果")
         header.addSubview(badge)
 
-        projectLabel.translatesAutoresizingMaskIntoConstraints = false
-        projectLabel.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
-        projectLabel.lineBreakMode = .byTruncatingTail
-        projectLabel.maximumNumberOfLines = 1
-        projectLabel.isHidden = true
-        projectLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        projectLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        projectLabel.setAccessibilityLabel("当前工程")
-        header.addSubview(projectLabel)
+        projectFilterHandler = onShowProjectFilter
+        projectButton.translatesAutoresizingMaskIntoConstraints = false
+        projectButton.actionHandler = { [weak self] in
+            guard let self else { return }
+            self.projectFilterHandler?(self.projectButton)
+        }
+        projectButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        projectButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        projectButton.setAccessibilityLabel("筛选项目")
+        header.addSubview(projectButton)
 
         monitoringHandler = onToggleMonitoring
         monitoringSwitch.translatesAutoresizingMaskIntoConstraints = false
@@ -1515,9 +1746,9 @@ private final class ExpandedContainerView: NSVisualEffectView {
             badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 12),
             badge.heightAnchor.constraint(equalToConstant: 13),
 
-            projectLabel.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 10),
-            projectLabel.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
-            projectLabel.trailingAnchor.constraint(
+            projectButton.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 6),
+            projectButton.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
+            projectButton.trailingAnchor.constraint(
                 lessThanOrEqualTo: monitoringSwitch.leadingAnchor,
                 constant: -12
             ),
@@ -1756,7 +1987,8 @@ private final class ExpandedContainerView: NSVisualEffectView {
         mark.toolTip = value.text("收起为图标", "Collapse to icon")
         mark.setAccessibilityLabel(value.text("收起 Aperture", "Collapse Aperture"))
         badge.setAccessibilityLabel(value.text("未读结果", "Unread results"))
-        projectLabel.setAccessibilityLabel(value.text("当前工程", "Current project"))
+        projectButton.setAccessibilityLabel(value.text("筛选项目", "Filter projects"))
+        projectButton.toolTip = value.text("搜索和筛选项目", "Search and filter projects")
         monitoringSwitch.toolTip = value.text(
             "监控所有 Codex 回答",
             "Monitor all Codex responses"
@@ -1767,11 +1999,9 @@ private final class ExpandedContainerView: NSVisualEffectView {
         ))
     }
 
-    func setProjectName(_ value: String?) {
-        let projectName = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        projectLabel.stringValue = projectName
-        projectLabel.toolTip = projectName.isEmpty ? nil : projectName
-        projectLabel.isHidden = projectName.isEmpty
+    func setProjectFilterTitle(_ value: String) {
+        projectButton.title = value
+        projectButton.toolTip = value
     }
 
     func setReaderSize(_ value: Int) {
@@ -1807,7 +2037,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
         let tint = isDark
             ? NSColor(calibratedWhite: 0.58, alpha: 1)
             : NSColor(calibratedWhite: 0.36, alpha: 1)
-        projectLabel.textColor = isDark
+        projectButton.contentTintColor = isDark
             ? NSColor(calibratedWhite: 0.72, alpha: 1)
             : NSColor(calibratedWhite: 0.28, alpha: 1)
         badge.textColor = isDark
@@ -1836,7 +2066,7 @@ private final class BubbleView: NSView {
         return image
     }()
 
-    private let badge = NSTextField(labelWithString: "0")
+    private let badge = NSButton(title: "0", target: nil, action: nil)
     private var bubbleConnected = false
     private var bubbleFocus: CGFloat = 0.62
     private var bubbleIsDark = true
@@ -1848,8 +2078,11 @@ private final class BubbleView: NSView {
     private var mouseDownLocation: NSPoint?
     private var windowOriginAtMouseDown: NSPoint?
     private var didDrag = false
+    private var language: AppLanguage = .cn
+    private var projectFilterName: String?
 
     var onOpen: (() -> Void)?
+    var onFilter: ((NSView) -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1862,12 +2095,17 @@ private final class BubbleView: NSView {
         badge.translatesAutoresizingMaskIntoConstraints = false
         badge.alignment = .center
         badge.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold)
-        badge.textColor = NSColor(
+        badge.isBordered = false
+        badge.bezelStyle = .regularSquare
+        badge.focusRingType = .none
+        badge.contentTintColor = NSColor(
             calibratedRed: 0.28,
             green: 0.78,
             blue: 0.52,
             alpha: 1
         )
+        badge.target = self
+        badge.action = #selector(openProjectFilter)
         addSubview(badge)
 
         NSLayoutConstraint.activate([
@@ -1941,13 +2179,13 @@ private final class BubbleView: NSView {
         )
     }
 
-    func update(state: AttentionState) {
+    func update(state: AttentionState, animateIncrease: Bool = true) {
         let shouldAnimate =
-            state.connected && state.unreadCount > lastUnreadCount
+            animateIncrease && state.connected && state.unreadCount > lastUnreadCount
         lastUnreadCount = state.unreadCount
         bubbleConnected = state.connected
         needsDisplay = true
-        badge.stringValue =
+        badge.title =
             state.unreadCount > 99 ? "99+" : String(state.unreadCount)
         badge.isHidden = state.unreadCount == 0
         if !state.connected {
@@ -2040,10 +2278,8 @@ private final class BubbleView: NSView {
     }
 
     func setLanguage(_ value: AppLanguage) {
-        toolTip = value.text(
-            "Aperture · 点击展开，拖动可移动图标",
-            "Aperture · Click to expand, drag to move the icon"
-        )
+        language = value
+        updateToolTip()
         setAccessibilityLabel(value.text("展开 Aperture", "Expand Aperture"))
         setAccessibilityHelp(value.text(
             "点击展开注意力侧边栏，拖动可移动猫咪图标",
@@ -2055,10 +2291,41 @@ private final class BubbleView: NSView {
         bubbleIsDark = isDark
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.borderWidth = 0
-        badge.textColor = isDark
+        badge.contentTintColor = isDark
             ? NSColor(calibratedRed: 0.36, green: 0.88, blue: 0.62, alpha: 1)
             : NSColor(calibratedRed: 0.10, green: 0.58, blue: 0.34, alpha: 1)
         needsDisplay = true
+    }
+
+    func setProjectFilterName(_ value: String?) {
+        projectFilterName = value
+        updateToolTip()
+    }
+
+    private func updateToolTip() {
+        if let projectFilterName {
+            toolTip = language.text(
+                "\(projectFilterName) · 点击展开，点击数字筛选项目",
+                "\(projectFilterName) · Click to expand; click the count to filter"
+            )
+            badge.toolTip = language.text(
+                "\(projectFilterName) · 点击筛选项目",
+                "\(projectFilterName) · Click to filter projects"
+            )
+        } else {
+            toolTip = language.text(
+                "Aperture · 点击展开，右键筛选项目",
+                "Aperture · Click to expand; right-click to filter projects"
+            )
+            badge.toolTip = language.text(
+                "点击筛选项目",
+                "Click to filter projects"
+            )
+        }
+    }
+
+    @objc private func openProjectFilter() {
+        onFilter?(badge)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -2103,6 +2370,10 @@ private final class BubbleView: NSView {
         windowOriginAtMouseDown = nil
     }
 
+    override func rightMouseDown(with event: NSEvent) {
+        onFilter?(self)
+    }
+
     override func accessibilityPerformPress() -> Bool {
         onOpen?()
         return true
@@ -2143,6 +2414,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
     private var settingsPanel: FloatingPanel?
     private var settingsController: SettingsViewController?
     private var isPositioningSettings = false
+    private var projectOptions: [ProjectFilterOption] = []
+    private var selectedProjectKey: String?
+    private var globalUnreadCount = 0
+    private var projectPopover: NSPopover?
 
     override init() {
         let storedTheme = UserDefaults.standard.object(
@@ -2158,6 +2433,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                 ? storedReaderSize
                 : 18
         readerSize = initialReaderSize
+        let storedProjectFilterKey = UserDefaults.standard.string(
+            forKey: "apertureProjectFilterKey"
+        )
+        selectedProjectKey = storedProjectFilterKey
         let storedWidth = UserDefaults.standard.double(
             forKey: "apertureExpandedWidth"
         )
@@ -2168,6 +2447,15 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             expandedSize = NSSize(width: storedWidth, height: storedHeight)
         }
 
+        let projectFilterLiteral: String = {
+            guard
+                let storedProjectFilterKey,
+                let data = try? JSONSerialization.data(
+                    withJSONObject: storedProjectFilterKey
+                )
+            else { return "null" }
+            return String(data: data, encoding: .utf8) ?? "null"
+        }()
         let contentController = WKUserContentController()
         contentController.addUserScript(WKUserScript(
             source: """
@@ -2176,6 +2464,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                 '--reader-size',
                 '\(initialReaderSize)px'
             );
+            window.__APERTURE_PROJECT_FILTER__ = \(projectFilterLiteral);
             """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
@@ -2202,6 +2491,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         var focusHandler: ((Double) -> Void)?
         var promptHandler: ((String) -> Void)?
         var settingsHandler: (() -> Void)?
+        var projectFilterHandler: ((NSView) -> Void)?
         expandedView = ExpandedContainerView(
             webView: webView,
             isDark: initialIsDark,
@@ -2212,6 +2502,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             onSizeChanged: { value in sizeHandler?(value) },
             onPromptChanged: { value in promptHandler?(value) },
             onToggleSettings: { settingsHandler?() },
+            onShowProjectFilter: { anchor in projectFilterHandler?(anchor) },
             onCollapse: { collapseHandler?() }
         )
         super.init()
@@ -2229,9 +2520,15 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             self?.updatePrompt(value)
         }
         settingsHandler = { [weak self] in self?.toggleSettings() }
+        projectFilterHandler = { [weak self] anchor in
+            self?.showProjectPicker(relativeTo: anchor)
+        }
         contentController.add(self, name: "aperture")
         webView.navigationDelegate = self
         bubbleView.onOpen = { [weak self] in self?.expand() }
+        bubbleView.onFilter = { [weak self] anchor in
+            self?.showProjectPicker(relativeTo: anchor)
+        }
         bubbleView.setTheme(isDark: initialIsDark)
 
         panel.level = .floating
@@ -2252,9 +2549,11 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         panel.animationBehavior = .utilityWindow
         panel.contentView = expandedView
         panel.setFrame(expandedFrame(), display: false)
+        updateProjectScopeLabels()
     }
 
     deinit {
+        projectPopover?.close()
         closeSettings()
         monitorTimer?.invalidate()
         focusWorkItem?.cancel()
@@ -2346,6 +2645,91 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }
     }
 
+    private func showProjectPicker(relativeTo anchor: NSView) {
+        projectPopover?.close()
+        let allProjects = ProjectFilterOption(
+            key: nil,
+            name: language.text("全部项目", "All projects"),
+            path: nil,
+            unreadCount: globalUnreadCount
+        )
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentViewController = ProjectPickerViewController(
+            language: language,
+            options: [allProjects] + projectOptions,
+            selectedKey: selectedProjectKey,
+            onSelect: { [weak self, weak popover] key in
+                popover?.close()
+                self?.selectProject(key)
+            }
+        )
+        projectPopover = popover
+        let edge: NSRectEdge = isExpanded ? .minY : .maxX
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: edge)
+    }
+
+    private func selectProject(_ key: String?) {
+        selectedProjectKey = key
+        if let key {
+            UserDefaults.standard.set(key, forKey: "apertureProjectFilterKey")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "apertureProjectFilterKey")
+        }
+        updateProjectScopeUI(animateIncrease: false)
+        let keyLiteral: String = {
+            guard
+                let key,
+                let data = try? JSONSerialization.data(withJSONObject: key)
+            else { return "null" }
+            return String(data: data, encoding: .utf8) ?? "null"
+        }()
+        webView.evaluateJavaScript("""
+        window.__APERTURE_PROJECT_FILTER__ = \(keyLiteral);
+        window.dispatchEvent(new CustomEvent('apertureProjectFilter', {
+          detail: { key: \(keyLiteral) }
+        }));
+        """)
+    }
+
+    private func selectedProjectName() -> String? {
+        guard let selectedProjectKey else { return nil }
+        if let option = projectOptions.first(where: {
+            $0.key == selectedProjectKey
+        }) {
+            return option.name
+        }
+        let fallback = (selectedProjectKey as NSString).lastPathComponent
+        return fallback.isEmpty ? selectedProjectKey : fallback
+    }
+
+    private func scopedUnreadCount() -> Int {
+        guard let selectedProjectKey else { return globalUnreadCount }
+        return projectOptions.first(where: {
+            $0.key == selectedProjectKey
+        })?.unreadCount ?? 0
+    }
+
+    private func updateProjectScopeUI(animateIncrease: Bool = true) {
+        updateProjectScopeLabels()
+        state = AttentionState(
+            reviewID: state.reviewID,
+            unreadCount: scopedUnreadCount(),
+            connected: state.connected
+        )
+        expandedView.update(state: state)
+        bubbleView.update(state: state, animateIncrease: animateIncrease)
+    }
+
+    private func updateProjectScopeLabels() {
+        let projectName = selectedProjectName()
+        expandedView.setProjectFilterTitle(
+            projectName ?? language.text("全部项目", "All projects")
+        )
+        bubbleView.setProjectFilterName(projectName)
+    }
+
     private func closeSettings() {
         guard let settings = settingsPanel else { return }
         panel.removeChildWindow(settings)
@@ -2409,14 +2793,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             if let data,
                error == nil,
                let envelope = try? JSONDecoder().decode(ReviewEnvelope.self, from: data) {
-                let next = AttentionState(
-                    reviewID: envelope.review?.id,
-                    unreadCount:
-                        envelope.inbox?.unreadCount ?? self.state.unreadCount,
-                    connected: true
-                )
                 DispatchQueue.main.async {
                     let recovered = !self.state.connected
+                    self.globalUnreadCount =
+                        envelope.inbox?.unreadCount ?? self.globalUnreadCount
                     self.monitoringEnabled =
                         envelope.monitoring?.enabled ?? self.monitoringEnabled
                     if self.pendingFocusRevision == nil {
@@ -2442,15 +2822,16 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     )
                     self.expandedView.setFocus(level: self.focusLevel)
                     self.expandedView.setPrompt(self.customPrompt)
-                    if self.displayedReviewID == nil ||
-                       self.displayedReviewID == envelope.review?.id {
-                        self.expandedView.setProjectName(
-                            envelope.review?.projectName
-                        )
-                    }
                     self.settingsController?.setFocus(level: self.focusLevel)
                     self.bubbleView.setFocus(level: self.focusLevel)
-                    self.apply(next)
+                    self.apply(AttentionState(
+                        reviewID: self.selectedProjectKey == nil
+                            ? envelope.review?.id
+                            : self.state.reviewID,
+                        unreadCount: self.scopedUnreadCount(),
+                        connected: true
+                    ))
+                    self.updateProjectScopeLabels()
                     if recovered {
                         self.loadWebView(force: true)
                     }
@@ -2600,6 +2981,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
     private func collapse() {
         guard isExpanded else { return }
+        projectPopover?.close()
         closeSettings()
         expandedSize = panel.frame.size
         persistExpandedSize()
@@ -2711,9 +3093,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                 if (response as? HTTPURLResponse)?.statusCode == 200,
                    let envelope {
                     self.acknowledgedReviewIDs.insert(reviewID)
+                    self.globalUnreadCount = envelope.inbox.unreadCount
                     self.state = AttentionState(
                         reviewID: self.state.reviewID,
-                        unreadCount: envelope.inbox.unreadCount,
+                        unreadCount: self.scopedUnreadCount(),
                         connected: self.state.connected
                     )
                     self.expandedView.update(state: self.state)
@@ -2734,6 +3117,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         )
         expandedView.setLanguage(value)
         bubbleView.setLanguage(value)
+        updateProjectScopeLabels()
         settingsController?.setLanguage(value)
         var request = URLRequest(url: languageURL)
         request.httpMethod = "PATCH"
@@ -2833,7 +3217,9 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         else { return }
         if type == "phase" {
             guard body["phase"] as? String == "processing" else { return }
-            panel.orderFrontRegardless()
+            if selectedProjectKey == nil {
+                panel.orderFrontRegardless()
+            }
             return
         }
         if type == "copy" {
@@ -2845,20 +3231,48 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }
         if type == "displayedReview" {
             displayedReviewID = body["reviewId"] as? String
-            expandedView.setProjectName(body["projectName"] as? String)
+            state = AttentionState(
+                reviewID: displayedReviewID,
+                unreadCount: scopedUnreadCount(),
+                connected: state.connected
+            )
             if isExpanded {
                 markReviewSeen(displayedReviewID)
             }
             return
         }
+        if type == "projectCatalog" {
+            globalUnreadCount = body["unreadCount"] as? Int ?? globalUnreadCount
+            if let rawProjects = body["projects"] as? [[String: Any]] {
+                projectOptions = rawProjects.compactMap { value in
+                    guard
+                        let key = value["key"] as? String,
+                        let name = value["name"] as? String
+                    else { return nil }
+                    return ProjectFilterOption(
+                        key: key,
+                        name: name,
+                        path: value["path"] as? String,
+                        unreadCount: value["unreadCount"] as? Int ?? 0
+                    )
+                }
+            }
+            updateProjectScopeUI()
+            return
+        }
         guard type == "review" else { return }
         let reviewID = body["reviewId"] as? String
-        if displayedReviewID == nil || displayedReviewID == reviewID {
-            expandedView.setProjectName(body["projectName"] as? String)
+        let projectPath = body["projectPath"] as? String
+        let projectName = body["projectName"] as? String
+        if let selectedProjectKey {
+            let incomingKey = projectPath?.isEmpty == false
+                ? projectPath
+                : projectName.map { "name:\($0)" }
+            guard incomingKey == selectedProjectKey else { return }
         }
         let next = AttentionState(
             reviewID: reviewID,
-            unreadCount: state.unreadCount,
+            unreadCount: scopedUnreadCount(),
             connected: body["connected"] as? Bool ?? true
         )
         apply(next)

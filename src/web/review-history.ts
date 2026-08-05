@@ -6,6 +6,53 @@ function reviewKey(review: ReviewSnapshot) {
   return `${review.runId}:${review.turnId ?? "latest"}`;
 }
 
+export interface ReviewProjectSummary {
+  key: string;
+  name: string;
+  path: string | null;
+  unreadCount: number;
+}
+
+export function reviewProjectKey(review: ReviewSnapshot) {
+  const projectPath = review.projectPath?.trim();
+  if (projectPath) return projectPath;
+  const projectName = review.projectName?.trim();
+  return projectName ? `name:${projectName}` : null;
+}
+
+export function filterReviewHistory(
+  reviews: ReviewSnapshot[],
+  projectKey: string | null
+) {
+  if (!projectKey) return reviews;
+  return reviews.filter((review) => reviewProjectKey(review) === projectKey);
+}
+
+export function reviewProjectCatalog(
+  reviews: ReviewSnapshot[],
+  unreadReviewIds: ReadonlySet<string>
+) {
+  const projects = new Map<string, ReviewProjectSummary & { order: number }>();
+  reviews.forEach((review, order) => {
+    const key = reviewProjectKey(review);
+    const name = review.projectName?.trim();
+    if (!key || !name) return;
+    const existing = projects.get(key);
+    projects.set(key, {
+      key,
+      name,
+      path: review.projectPath?.trim() || null,
+      unreadCount:
+        (existing?.unreadCount ?? 0) +
+        (unreadReviewIds.has(review.id) ? 1 : 0),
+      order
+    });
+  });
+  return [...projects.values()]
+    .sort((left, right) => right.order - left.order)
+    .map(({ order: _order, ...project }) => project);
+}
+
 function timestamp(value: string | undefined) {
   const parsed = Date.parse(value ?? "");
   return Number.isFinite(parsed) ? parsed : 0;
