@@ -541,7 +541,16 @@ private final class SettingsViewController: NSViewController {
     private let providerLabel = NSTextField(labelWithString: "Provider")
     private let providerPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let keyLabel = NSTextField(labelWithString: "API Key")
-    private let secureKeyField = NSSecureTextField(frame: .zero)
+    // Keep the API key obscured without presenting an NSSecureTextField to
+    // Password AutoFill. macOS treats every NSSecureTextField as a login
+    // password, even when its content type is unset, and shows "Passwords…".
+    private let secureKeyField: NSTextField = {
+        let field = NSTextField(frame: .zero)
+        field.cell = NSSecureTextFieldCell(textCell: "")
+        field.contentType = nil
+        field.isAutomaticTextCompletionEnabled = false
+        return field
+    }()
     private let visibleKeyField = NSTextField(frame: .zero)
     private let keyVisibilityButton = ActionButton(
         symbol: "eye",
