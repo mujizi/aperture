@@ -503,7 +503,7 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "aperture-attention",
-    version: "0.2.2",
+    version: "0.2.4",
     capabilities: ["language-v1", "public-model-catalog-v1"]
   });
 });

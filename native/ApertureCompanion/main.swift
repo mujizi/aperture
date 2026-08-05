@@ -206,38 +206,6 @@ private final class ActionButton: NSButton {
     }
 }
 
-private final class ProjectFilterButton: NSButton {
-    var actionHandler: (() -> Void)?
-
-    init() {
-        super.init(frame: .zero)
-        title = ""
-        image = NSImage(
-            systemSymbolName: "chevron.down",
-            accessibilityDescription: "筛选项目"
-        )
-        imagePosition = .imageTrailing
-        imageHugsTitle = true
-        isBordered = false
-        bezelStyle = .regularSquare
-        alignment = .left
-        focusRingType = .none
-        font = NSFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
-        setButtonType(.momentaryChange)
-        cell?.lineBreakMode = .byTruncatingTail
-        target = self
-        action = #selector(invoke)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    @objc private func invoke() {
-        actionHandler?()
-    }
-}
-
 private final class ProjectPickerRowView: NSView {
     private let check = NSTextField(labelWithString: "✓")
     private let name = NSTextField(labelWithString: "")
@@ -248,7 +216,7 @@ private final class ProjectPickerRowView: NSView {
     init(option: ProjectFilterOption, selected: Bool) {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.cornerRadius = 6
         layer?.backgroundColor = selected
             ? NSColor.controlAccentColor.withAlphaComponent(0.10).cgColor
             : NSColor.clear.cgColor
@@ -260,7 +228,7 @@ private final class ProjectPickerRowView: NSView {
         addSubview(check)
 
         name.translatesAutoresizingMaskIntoConstraints = false
-        name.font = NSFont.systemFont(ofSize: 13, weight: selected ? .medium : .regular)
+        name.font = NSFont.systemFont(ofSize: 14, weight: selected ? .medium : .regular)
         name.lineBreakMode = .byTruncatingTail
         name.toolTip = option.path ?? option.name
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -268,7 +236,7 @@ private final class ProjectPickerRowView: NSView {
         name.stringValue = option.name
 
         count.translatesAutoresizingMaskIntoConstraints = false
-        count.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        count.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
         count.alignment = .right
         count.textColor = NSColor(
             calibratedRed: 0.28,
@@ -292,14 +260,14 @@ private final class ProjectPickerRowView: NSView {
         addSubview(button)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 34),
-            check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: 32),
+            check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             check.centerYAnchor.constraint(equalTo: centerYAnchor),
             check.widthAnchor.constraint(equalToConstant: 14),
-            name.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 5),
+            name.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 4),
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             count.leadingAnchor.constraint(greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
-            count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             count.centerYAnchor.constraint(equalTo: centerYAnchor),
             button.leadingAnchor.constraint(equalTo: leadingAnchor),
             button.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -317,6 +285,29 @@ private final class ProjectPickerRowView: NSView {
     }
 }
 
+private final class ProjectPickerEmptyView: NSView {
+    init(language: AppLanguage) {
+        super.init(frame: .zero)
+        let label = NSTextField(labelWithString: language.text(
+            "没有匹配项目",
+            "No matching projects"
+        ))
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        label.textColor = .secondaryLabelColor
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 32),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 26),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
 private final class ProjectPickerViewController: NSViewController, NSSearchFieldDelegate {
     private let language: AppLanguage
     private let options: [ProjectFilterOption]
@@ -325,19 +316,23 @@ private final class ProjectPickerViewController: NSViewController, NSSearchField
     private let rows = NSStackView(frame: .zero)
     private let scrollView = NSScrollView(frame: .zero)
     private let onSelect: (String?) -> Void
+    private let onResize: (NSSize) -> Void
+    private var documentHeightConstraint: NSLayoutConstraint?
 
     init(
         language: AppLanguage,
         options: [ProjectFilterOption],
         selectedKey: String?,
-        onSelect: @escaping (String?) -> Void
+        onSelect: @escaping (String?) -> Void,
+        onResize: @escaping (NSSize) -> Void
     ) {
         self.language = language
         self.options = options
         self.selectedKey = selectedKey
         self.onSelect = onSelect
+        self.onResize = onResize
         super.init(nibName: nil, bundle: nil)
-        preferredContentSize = NSSize(width: 258, height: 310)
+        preferredContentSize = Self.contentSize(rowCount: options.count)
     }
 
     required init?(coder: NSCoder) {
@@ -354,17 +349,23 @@ private final class ProjectPickerViewController: NSViewController, NSSearchField
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.placeholderString = language.text("搜索项目…", "Search projects…")
         searchField.sendsSearchStringImmediately = true
+        searchField.controlSize = .regular
         searchField.delegate = self
         root.addSubview(searchField)
 
         rows.translatesAutoresizingMaskIntoConstraints = false
         rows.orientation = .vertical
-        rows.alignment = .width
-        rows.spacing = 2
+        rows.alignment = .leading
+        rows.distribution = .fill
+        rows.spacing = 1
 
         let document = NSView(frame: .zero)
         document.translatesAutoresizingMaskIntoConstraints = false
         document.addSubview(rows)
+        documentHeightConstraint = document.heightAnchor.constraint(
+            equalToConstant: CGFloat(max(options.count, 1) * 33)
+        )
+        documentHeightConstraint?.isActive = true
         NSLayoutConstraint.activate([
             rows.leadingAnchor.constraint(equalTo: document.leadingAnchor),
             rows.trailingAnchor.constraint(equalTo: document.trailingAnchor),
@@ -380,14 +381,14 @@ private final class ProjectPickerViewController: NSViewController, NSSearchField
         root.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
-            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
-            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 8),
+            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
+            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
             searchField.heightAnchor.constraint(equalToConstant: 28),
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
-            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
-            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
-            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -9),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 5),
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 6),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -6),
+            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -6),
             document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
         ])
         rebuildRows(query: "")
@@ -414,6 +415,17 @@ private final class ProjectPickerViewController: NSViewController, NSSearchField
                 option.name.localizedLowercase.contains(needle) ||
                 (option.path?.localizedLowercase.contains(needle) ?? false)
         }
+        let visibleRowCount = max(filtered.count, 1)
+        documentHeightConstraint?.constant = CGFloat(visibleRowCount * 33)
+        let nextSize = Self.contentSize(rowCount: visibleRowCount)
+        preferredContentSize = nextSize
+        onResize(nextSize)
+        if filtered.isEmpty {
+            let empty = ProjectPickerEmptyView(language: language)
+            rows.addArrangedSubview(empty)
+            empty.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
+            return
+        }
         for option in filtered {
             let row = ProjectPickerRowView(
                 option: option,
@@ -423,7 +435,16 @@ private final class ProjectPickerViewController: NSViewController, NSSearchField
                 self?.onSelect(option.key)
             }
             rows.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
         }
+    }
+
+    private static func contentSize(rowCount: Int) -> NSSize {
+        let visibleRows = min(max(rowCount, 1), 8)
+        return NSSize(
+            width: 240,
+            height: CGFloat(47 + visibleRows * 33)
+        )
     }
 }
 
@@ -1624,7 +1645,11 @@ private final class ResizeHandleView: NSView {
 private final class ExpandedContainerView: NSVisualEffectView {
     private let mark = ApertureCatMarkView(frame: .zero)
     private let badge = NSTextField(labelWithString: "0")
-    private let projectButton = ProjectFilterButton()
+    private let projectLabel = NSTextField(labelWithString: "")
+    private let projectFilterButton = ActionButton(
+        symbol: "chevron.down",
+        label: "筛选项目"
+    )
     private let header = DragHeaderView(frame: .zero)
     private let separator = NSView(frame: .zero)
     private let monitoringSwitch = NSSwitch(frame: .zero)
@@ -1646,6 +1671,7 @@ private final class ExpandedContainerView: NSVisualEffectView {
     private var currentIsDark: Bool
     private var currentReaderSize: Int
     private var currentPrompt = ""
+    private var currentProjectFilterName: String?
     private var language: AppLanguage = .cn
 
     init(
@@ -1691,15 +1717,23 @@ private final class ExpandedContainerView: NSVisualEffectView {
         header.addSubview(badge)
 
         projectFilterHandler = onShowProjectFilter
-        projectButton.translatesAutoresizingMaskIntoConstraints = false
-        projectButton.actionHandler = { [weak self] in
+        projectLabel.translatesAutoresizingMaskIntoConstraints = false
+        projectLabel.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        projectLabel.lineBreakMode = .byTruncatingTail
+        projectLabel.maximumNumberOfLines = 1
+        projectLabel.isHidden = true
+        projectLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        projectLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        projectLabel.setAccessibilityLabel("当前项目")
+        header.addSubview(projectLabel)
+
+        projectFilterButton.translatesAutoresizingMaskIntoConstraints = false
+        projectFilterButton.actionHandler = { [weak self] in
             guard let self else { return }
-            self.projectFilterHandler?(self.projectButton)
+            self.projectFilterHandler?(self.projectFilterButton)
         }
-        projectButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        projectButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        projectButton.setAccessibilityLabel("筛选项目")
-        header.addSubview(projectButton)
+        projectFilterButton.setAccessibilityLabel("筛选项目")
+        header.addSubview(projectFilterButton)
 
         monitoringHandler = onToggleMonitoring
         monitoringSwitch.translatesAutoresizingMaskIntoConstraints = false
@@ -1746,12 +1780,17 @@ private final class ExpandedContainerView: NSVisualEffectView {
             badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 12),
             badge.heightAnchor.constraint(equalToConstant: 13),
 
-            projectButton.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 6),
-            projectButton.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
-            projectButton.trailingAnchor.constraint(
+            projectLabel.leadingAnchor.constraint(equalTo: mark.trailingAnchor, constant: 10),
+            projectLabel.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
+
+            projectFilterButton.leadingAnchor.constraint(equalTo: projectLabel.trailingAnchor, constant: 1),
+            projectFilterButton.centerYAnchor.constraint(equalTo: mark.centerYAnchor),
+            projectFilterButton.trailingAnchor.constraint(
                 lessThanOrEqualTo: monitoringSwitch.leadingAnchor,
                 constant: -12
             ),
+            projectFilterButton.widthAnchor.constraint(equalToConstant: 22),
+            projectFilterButton.heightAnchor.constraint(equalToConstant: 28),
 
             monitoringSwitch.trailingAnchor.constraint(
                 equalTo: settingsButton.leadingAnchor,
@@ -1987,8 +2026,8 @@ private final class ExpandedContainerView: NSVisualEffectView {
         mark.toolTip = value.text("收起为图标", "Collapse to icon")
         mark.setAccessibilityLabel(value.text("收起 Aperture", "Collapse Aperture"))
         badge.setAccessibilityLabel(value.text("未读结果", "Unread results"))
-        projectButton.setAccessibilityLabel(value.text("筛选项目", "Filter projects"))
-        projectButton.toolTip = value.text("搜索和筛选项目", "Search and filter projects")
+        projectLabel.setAccessibilityLabel(value.text("当前项目", "Current project"))
+        updateProjectFilterAppearance()
         monitoringSwitch.toolTip = value.text(
             "监控所有 Codex 回答",
             "Monitor all Codex responses"
@@ -1999,9 +2038,30 @@ private final class ExpandedContainerView: NSVisualEffectView {
         ))
     }
 
-    func setProjectFilterTitle(_ value: String) {
-        projectButton.title = value
-        projectButton.toolTip = value
+    func setDisplayedProjectName(_ value: String?) {
+        let name = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        projectLabel.stringValue = name
+        projectLabel.toolTip = name.isEmpty ? nil : name
+        projectLabel.isHidden = name.isEmpty
+    }
+
+    func setProjectFilterName(_ value: String?) {
+        currentProjectFilterName = value
+        updateProjectFilterAppearance()
+    }
+
+    private func updateProjectFilterAppearance() {
+        let active = currentProjectFilterName != nil
+        projectFilterButton.toolTip = currentProjectFilterName.map {
+            language.text("筛选：\($0)", "Filter: \($0)")
+        } ?? language.text("筛选：全部项目", "Filter: All projects")
+        projectFilterButton.contentTintColor = active
+            ? (currentIsDark
+                ? NSColor(calibratedRed: 0.91, green: 0.70, blue: 0.30, alpha: 1)
+                : NSColor(calibratedRed: 0.65, green: 0.43, blue: 0.04, alpha: 1))
+            : (currentIsDark
+                ? NSColor(calibratedWhite: 0.58, alpha: 1)
+                : NSColor(calibratedWhite: 0.36, alpha: 1))
     }
 
     func setReaderSize(_ value: Int) {
@@ -2037,13 +2097,14 @@ private final class ExpandedContainerView: NSVisualEffectView {
         let tint = isDark
             ? NSColor(calibratedWhite: 0.58, alpha: 1)
             : NSColor(calibratedWhite: 0.36, alpha: 1)
-        projectButton.contentTintColor = isDark
+        projectLabel.textColor = isDark
             ? NSColor(calibratedWhite: 0.72, alpha: 1)
             : NSColor(calibratedWhite: 0.28, alpha: 1)
         badge.textColor = isDark
             ? NSColor(calibratedRed: 0.36, green: 0.88, blue: 0.62, alpha: 1)
             : NSColor(calibratedRed: 0.10, green: 0.58, blue: 0.34, alpha: 1)
         settingsButton.contentTintColor = tint
+        updateProjectFilterAppearance()
     }
 }
 
@@ -2450,9 +2511,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let projectFilterLiteral: String = {
             guard
                 let storedProjectFilterKey,
-                let data = try? JSONSerialization.data(
-                    withJSONObject: storedProjectFilterKey
-                )
+                let data = try? JSONEncoder().encode(storedProjectFilterKey)
             else { return "null" }
             return String(data: data, encoding: .utf8) ?? "null"
         }()
@@ -2663,6 +2722,10 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
             onSelect: { [weak self, weak popover] key in
                 popover?.close()
                 self?.selectProject(key)
+            },
+            onResize: { [weak popover] size in
+                guard popover?.isShown == true else { return }
+                popover?.contentSize = size
             }
         )
         projectPopover = popover
@@ -2681,7 +2744,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         let keyLiteral: String = {
             guard
                 let key,
-                let data = try? JSONSerialization.data(withJSONObject: key)
+                let data = try? JSONEncoder().encode(key)
             else { return "null" }
             return String(data: data, encoding: .utf8) ?? "null"
         }()
@@ -2724,9 +2787,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
 
     private func updateProjectScopeLabels() {
         let projectName = selectedProjectName()
-        expandedView.setProjectFilterTitle(
-            projectName ?? language.text("全部项目", "All projects")
-        )
+        expandedView.setProjectFilterName(projectName)
         bubbleView.setProjectFilterName(projectName)
     }
 
@@ -2822,6 +2883,12 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
                     )
                     self.expandedView.setFocus(level: self.focusLevel)
                     self.expandedView.setPrompt(self.customPrompt)
+                    if self.displayedReviewID == nil ||
+                       self.displayedReviewID == envelope.review?.id {
+                        self.expandedView.setDisplayedProjectName(
+                            envelope.review?.projectName
+                        )
+                    }
                     self.settingsController?.setFocus(level: self.focusLevel)
                     self.bubbleView.setFocus(level: self.focusLevel)
                     self.apply(AttentionState(
@@ -3231,6 +3298,7 @@ private final class AttentionPanelController: NSObject, WKScriptMessageHandler, 
         }
         if type == "displayedReview" {
             displayedReviewID = body["reviewId"] as? String
+            expandedView.setDisplayedProjectName(body["projectName"] as? String)
             state = AttentionState(
                 reviewID: displayedReviewID,
                 unreadCount: scopedUnreadCount(),

@@ -71,7 +71,7 @@ Aperture 在后台监听本地 Codex 任务。每轮完成后，它自动取出�
 
 ### 1. 确认环境
 
-当前 `v0.2.2` 预览版需要：
+当前 `v0.2.4` 预览版需要：
 
 - Apple Silicon Mac（M1/M2/M3/M4 等；暂不支持 Intel Mac）
 - macOS 13 Ventura 或更高版本
@@ -96,7 +96,7 @@ brew install node
 
 ### 2. 安装 Aperture
 
-1. 从 [Releases](https://github.com/mujizi/aperture/releases/latest) 下载 `Aperture-v0.2.2-macos-arm64.dmg` 或 `.zip`。
+1. 从 [Releases](https://github.com/mujizi/aperture/releases/latest) 下载 `Aperture-v0.2.4-macos-arm64.dmg` 或 `.zip`。
 2. 将 `Aperture.app` 拖入 `/Applications`。
 3. 首次启动时右键点击 Aperture，选择“打开”。
 4. 如果 macOS 仍然拦截，前往“系统设置 → 隐私与安全性”，确认打开。
@@ -265,7 +265,7 @@ Aperture 希望让这些 AI 使用记录能够被本地化保存、自动化整�
 - 属于用户自己的偏好、判断方式和工作习惯；
 - 经过验证、有价值、可以再次调用的模型使用经验。
 
-未来的 Aperture 不只帮助用户看清“这一轮发生了什么”，也希望帮助用户拥有、组织并复用自己与 AI 共同创造的经验。这是产品的发展方向，不代表当前 `v0.2.2` 预览版已经实现上述全部能力。
+未来的 Aperture 不只帮助用户看清“这一轮发生了什么”，也希望帮助用户拥有、组织并复用自己与 AI 共同创造的经验。这是产品的发展方向，不代表当前 `v0.2.4` 预览版已经实现上述全部能力。
 
 ## 设计哲学
 
