@@ -23,6 +23,7 @@ swiftc \
   -framework AppKit \
   -framework WebKit \
   -framework QuartzCore \
+  native/ApertureCompanion/APIKeyField.swift \
   native/ApertureCompanion/main.swift \
   -o "$contents_dir/MacOS/Aperture"
 

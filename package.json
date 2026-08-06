@@ -1,6 +1,6 @@
 {
   "name": "aperture-attention-layer",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "description": "A local-first attention routing layer between coding agents and humans.",
@@ -18,7 +18,9 @@
     "build:server": "node scripts/build-server.mjs",
     "setup:validator": "python3 -m venv .venv && .venv/bin/pip install pyyaml",
     "validate:plugin": ".venv/bin/python /Users/wangmengna/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/aperture-attention",
-    "test": "vitest run",
+    "test": "npm run test:web && npm run test:native",
+    "test:web": "vitest run",
+    "test:native": "scripts/test-native.sh",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "demo": "tsx scripts/seed-demo.ts",
